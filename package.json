@@ -1,0 +1,15 @@
+{
+  "name": "publicodes-compiled",
+  "dependencies": {
+    "astring": "^1.8.6",
+    "estree-toolkit": "^1.7.2",
+    "mitata": "^0.1.6",
+    "publicodes": "^1.0.0-beta.71",
+    "yaml": "^2.3.2",
+    "zimmerframe": "^1.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "type": "module"
+}

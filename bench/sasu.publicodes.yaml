@@ -1,0 +1,30 @@
+chiffre affaires: 6000 €/an # todo: €/mois
+charges: 1000 €/an
+
+proportion salaire: 50%
+
+impôt sur les sociétés:
+  barème:
+    assiette: bénéfice
+    tranches:
+      - taux: 15%
+        plafond: 38120 €/an
+      - taux: 25%
+
+bénéfice: chiffre affaires - charges - salaire . total
+bénéfice . net: bénéfice - impôt sur les sociétés
+
+dividendes:
+dividendes . brut: bénéfice . net
+dividendes . net: brut - prélèvement forfaitaire unique
+dividendes . prélèvement forfaitaire unique:
+  produit:
+    assiette: brut
+    taux: 30%
+
+salaire:
+salaire . total: chiffre affaires * proportion salaire
+salaire . net: total - charges
+salaire . charges: total * 0.45
+
+revenu net après impôt: salaire . net + dividendes . net
