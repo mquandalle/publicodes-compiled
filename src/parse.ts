@@ -1,5 +1,6 @@
 import { tokenize, type Token } from "./tokenize";
 import { walk } from "zimmerframe";
+import { conversionFactor, inferUnit } from "./units";
 
 export type ASTNode =
   | { type: "constant"; value: number; unit?: string }
@@ -12,31 +13,32 @@ export type ASTNode =
       tranches: Array<{ taux: ASTNode; plafond?: ASTNode }>;
     };
 
-export function parse(source): Record<string, ASTNode> {
+type ASTRuleNode = { type: "rule"; name: string; value: ASTNode };
+
+export type ASTPublicodesNode = {
+  type: "publicodes";
+  rules: Array<ASTRuleNode>;
+};
+
+export function parse(source: string): ASTPublicodesNode {
   const tokens: Token[] = tokenize(source);
-  const parsedRules = {};
+  const parsedRules: ASTRuleNode[] = [];
   let index = 0;
 
   while (index < tokens.length) {
-    const currentToken = tokens[index];
+    const currentToken = tokens[index++];
     if (currentToken.type === "outdent") {
-      index++;
       continue;
     } else if (currentToken.type === "key") {
-      index++;
-      const ruleName = currentToken.value;
-
-      if (tokens[index]?.type === "key") {
-        parsedRules[ruleName] = {
-          type: "constant",
-          value: "undefined",
-        };
-        continue;
-      }
-
-      parsedRules[ruleName] = parseExpression();
+      const value =
+        tokens[index]?.type === "key"
+          ? {
+              type: "constant",
+              value: "undefined",
+            }
+          : parseExpression();
+      parsedRules.push({ type: "rule", name: currentToken.value, value });
     } else {
-      console.log(currentToken, index);
       throw new Error(`Unexpected token ${currentToken.type}`);
     }
   }
@@ -72,7 +74,7 @@ export function parse(source): Record<string, ASTNode> {
         list.push(parseExpression());
       }
     }
-    if (index < tokens.length && tokens[index].type === "outdent") {
+    if (tokens[index].type === "outdent") {
       index++;
     }
     return list;
@@ -171,11 +173,14 @@ export function parse(source): Record<string, ASTNode> {
     return mechanismNode;
   }
 
-  return resolveNames(parsedRules);
+  const parsedProgram = { type: "publicodes", rules: parsedRules } as const;
+
+  return inferRulesUnit(resolveNames(parsedProgram));
 }
 
-function resolveNames(parsedRules) {
-  const availableNames = Object.keys(parsedRules);
+// XXX on parcourt l'arbre 2 fois avec resolveName et inferRulesUnit, faisable en 1 fois ?
+
+function resolveNames(parsedRules: ASTPublicodesNode) {
   const allParents = (name) =>
     name
       .split(".")
@@ -184,29 +189,120 @@ function resolveNames(parsedRules) {
         return [...acc, last ? `${last} . ${name.trim()}` : name.trim()];
       }, [])
       .reverse();
-  return Object.fromEntries(
-    Object.entries(parsedRules).map(([name, node]) => {
-      return [
-        name,
-        walk(node, null, {
-          reference(node) {
-            const parentName = allParents(name).find((parent) =>
-              availableNames.includes(`${parent} . ${node.name}`)
-            );
-            if (parentName) {
+
+  return walk(
+    parsedRules,
+    {},
+    {
+      publicodes(node, { next }) {
+        next({ availableNames: node.rules.map((rule) => rule.name) });
+      },
+      rule: (node, { next, state }) => {
+        next({ ...state, parentsNames: allParents(node.name) });
+      },
+      reference(node, { state: { availableNames, parentsNames } }) {
+        const parentName = parentsNames.find((parent) =>
+          availableNames.includes(`${parent} . ${node.name}`)
+        );
+        if (parentName) {
+          return {
+            type: "reference",
+            name: `${parentName} . ${node.name}`,
+          };
+        }
+        if (availableNames.includes(node.name)) {
+          return node;
+        }
+
+        throw Error(`Unknown reference ${node.name} in ${parentsNames[0]}`);
+      },
+    }
+  );
+}
+
+function inferRulesUnit(parsedRules) {
+  const inferedUnits = new WeakMap();
+  const inferRuleUnit = (ruleNode) => {
+    return walk(
+      ruleNode,
+      { enforceUnitStack: [] },
+      {
+        rule(node, { visit }) {
+          const rewrittenNode = visit(node.value);
+          inferedUnits.set(node, inferedUnits.get(rewrittenNode));
+          return { ...node, value: rewrittenNode, unit: rewrittenNode.unit };
+        },
+        reference(node) {
+          const associatedRule = parsedRules.rules.find(
+            (rule) => rule.name === node.name
+          );
+          if (!inferedUnits.has(associatedRule)) {
+            inferRuleUnit(associatedRule);
+          }
+          inferedUnits.set(node, inferedUnits.get(associatedRule));
+        },
+        constant(node) {
+          inferedUnits.set(node, node.unit);
+        },
+        barème(node, { visit }) {
+          const assietteUnit = inferedUnits.get(visit(node.assiette));
+
+          const newNode = {
+            ...node,
+            tranches: node.tranches.map((t) => {
+              if (!t.plafond) return t;
+              const plafondUnit = inferedUnits.get(visit(t.plafond));
+              if (plafondUnit === assietteUnit) return t;
+              else {
+                return {
+                  ...t,
+                  plafond: {
+                    type: "unitConversion",
+                    factor: {
+                      type: "constant",
+                      value: conversionFactor(assietteUnit, plafondUnit),
+                    },
+                    value: t.plafond,
+                  },
+                };
+              }
+            }),
+          };
+          inferedUnits.set(newNode, assietteUnit);
+          return newNode;
+        },
+        produit(node, { visit }) {
+          const assietteUnit = inferedUnits.get(visit(node.assiette));
+          const tauxUnit = inferedUnits.get(visit(node.taux));
+          inferedUnits.set(node, inferUnit("*", assietteUnit, tauxUnit));
+        },
+        operation(node, { visit }) {
+          const leftUnit = inferedUnits.get(visit(node.left));
+          const rightUnit = inferedUnits.get(visit(node.right));
+          if (node.operator === "+" || node.operator === "-") {
+            inferedUnits.set(node, leftUnit);
+
+            if (leftUnit !== rightUnit) {
               return {
-                type: "reference",
-                name: `${parentName} . ${node.name}`,
+                ...node,
+                right: {
+                  type: "unitConversion",
+                  factor: {
+                    type: "constant",
+                    value: conversionFactor(leftUnit, rightUnit),
+                  },
+                  value: node.right,
+                },
               };
             }
-            if (availableNames.includes(node.name)) {
-              return node;
-            }
+          } else {
+            const unit = inferUnit(node.operator, leftUnit, rightUnit);
+            inferedUnits.set(node, unit);
+          }
+        },
+      }
+    );
+  };
 
-            throw Error(`Unknown reference ${node.name} in ${name}`);
-          },
-        }),
-      ];
-    })
-  );
+  return walk(parsedRules, {}, { rule: (node) => inferRuleUnit(node) });
 }

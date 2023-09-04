@@ -1,27 +1,23 @@
 import { walk } from "zimmerframe";
 import { builders as b } from "estree-toolkit";
 import { generate } from "astring";
-import { type ASTNode } from "./parse";
+import { type ASTPublicodesNode } from "./parse";
 
-const injectedRuntime = `
-const evalBareme = (a, t) => t.map((u, i) => ((Math.max(Math.min(a, u.plafond ?? Infinity) - (t[i - 1]?.plafond ?? 0), 0)) * u.taux)).reduce((a, b) => a + b, 0);
-`;
+export function compile(parsedPublicodes: ASTPublicodesNode) {
+  const state = { injectedRuntime: new Set() };
+  const esTree = walk(parsedPublicodes, state, {
+    publicodes(node, { visit }) {
+      return b.objectExpression(
+        node.rules.map((ruleNode) =>
+          b.property("init", b.literal(ruleNode.name), visit(ruleNode))
+        )
+      );
+    },
 
-export function compile(rules: Record<string, ASTNode>) {
-  const esTree = b.objectExpression(
-    Object.entries(rules).map(([ruleName, node]) =>
-      b.property(
-        "init",
-        b.literal(ruleName),
-        wrapInContextFunction(publicodesASTtoESTree(node))
-      )
-    )
-  );
-  return wrapRuntime(generate(esTree));
-}
+    rule(node, { visit }) {
+      return b.arrowFunctionExpression([], visit(node.value));
+    },
 
-const publicodesASTtoESTree = (ast: ASTNode) =>
-  walk(ast, null, {
     constant(node) {
       return b.literal(node.value);
     },
@@ -47,23 +43,29 @@ const publicodesASTtoESTree = (ast: ASTNode) =>
       });
     },
 
-    barème(node, { visit }) {
+    unitConversion(node, { visit }) {
+      return visit({
+        type: "operation",
+        operator: "*",
+        left: node.factor,
+        right: node.value,
+      });
+    },
+
+    barème(node, { state, visit }) {
+      state.injectedRuntime.add(
+        "const evalBareme = (a, t) => t.map((u, i) => ((Math.max(Math.min(a, u.plafond ?? Infinity) - (t[i - 1]?.plafond ?? 0), 0)) * u.taux)).reduce((a, b) => a + b, 0);"
+      );
       return b.callExpression(b.identifier("evalBareme"), [
         visit(node.assiette),
         b.arrayExpression(
           node.tranches.map((t) =>
             b.objectExpression(
-              [
-                b.property("init", b.identifier("taux"), visit(t.taux)),
-
-                t.plafond
-                  ? b.property(
-                      "init",
-                      b.identifier("plafond"),
-                      visit(t.plafond)
-                    )
-                  : null,
-              ].filter(Boolean)
+              ["taux", t.plafond && "plafond"]
+                .filter(Boolean)
+                .map((attr) =>
+                  b.property("init", b.identifier(attr), visit(t[attr]))
+                )
             )
           )
         ),
@@ -71,8 +73,7 @@ const publicodesASTtoESTree = (ast: ASTNode) =>
     },
   });
 
-const wrapRuntime = (jsCodeRules) =>
-  `(() => {${injectedRuntime}return ${jsCodeRules}})()`;
-
-const wrapInContextFunction = (ast) =>
-  b.arrowFunctionExpression([b.identifier("r")], ast);
+  const jsCodeRules = generate(esTree);
+  const injectedRuntime = Array.from(state.injectedRuntime).join(";\n");
+  return `((r) => {${injectedRuntime}\nreturn ${jsCodeRules}})`;
+}

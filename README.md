@@ -10,4 +10,4 @@ Prototype d'une version de publicodes transpilée en JavaScript. Écriture d'un 
 Gains de performances observés :
 
 - sur le parsing : 10x plus rapide
-- sur l'évaluation : 400x plus rapide
+- sur l'évaluation : 500x plus rapide

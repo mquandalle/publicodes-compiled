@@ -13,8 +13,8 @@ const keyRegexStr = new RegExp("^" + ruleRegexStr + ":", "u");
 const numberRegex = /^[0-9]+(\.[0-9]+)?/;
 const unitRegex = /^\s*([a-z€]+(\/[a-z€]+)?)/;
 
-export function tokenize(ruleStr: string): Token[] {
-  const lines = ruleStr.split("\n");
+export function tokenize(source: string): Token[] {
+  const lines = source.split("\n");
   let tokens: Token[] = [];
   let currentIndent = 0;
   let indentStack: number[] = [];

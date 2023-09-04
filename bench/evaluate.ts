@@ -1,5 +1,5 @@
 import Publicodes from "publicodes";
-import { CompiledPublicodes } from "..";
+import { CompiledPublicodes } from "../src";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as yamlParse } from "yaml";
