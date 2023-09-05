@@ -1,5 +1,7 @@
 export type Token =
   | { type: "constant"; value: number; unit?: string }
+  | { type: "boolean"; value: boolean }
+  | { type: "text"; value: string }
   | { type: "operator"; value: string }
   | { type: "reference"; value: string }
   | { type: "indent" }
@@ -7,19 +9,20 @@ export type Token =
   | { type: "list-item" }
   | { type: "key"; value: string };
 
-const ruleRegexStr = "[\\p{L}\\s\\.']+";
+const ruleRegexStr = "\\p{L}[\\p{L}\\s\\.']*";
 const refRegex = new RegExp("^" + ruleRegexStr, "u");
 const keyRegexStr = new RegExp("^" + ruleRegexStr + ":", "u");
+const booleanRegex = /^(oui|non)/;
 const numberRegex = /^[0-9]+(\.[0-9]+)?/;
 const unitRegex = /^\s*([a-z€]+(\/[a-z€]+)?)/;
+const infixOperatorRegex = /^(<=|>=|<|>|=|\+|\-|\*|\/)/;
 
 export function tokenize(source: string): Token[] {
-  const lines = source.split("\n");
   let tokens: Token[] = [];
   let currentIndent = 0;
   let indentStack: number[] = [];
 
-  for (const line of lines) {
+  for (const line of source.split("\n")) {
     let indent = 0;
     let cursor = 0;
 
@@ -56,9 +59,43 @@ export function tokenize(source: string): Token[] {
         break;
       }
 
-      if (remainingLine.match(/^[\+\-\*\/]/)) {
-        tokens.push({ type: "operator", value: remainingLine[0] });
-        cursor++;
+      const operatorToken = remainingLine.match(infixOperatorRegex);
+      if (operatorToken) {
+        tokens.push({ type: "operator", value: operatorToken[0] });
+        cursor += operatorToken[0].length;
+        continue;
+      }
+
+      const booleanToken = remainingLine.match(booleanRegex);
+      if (booleanToken) {
+        tokens.push({ type: "boolean", value: booleanToken[0] === "oui" });
+        cursor += booleanToken[0].length;
+        continue;
+      }
+
+      if (remainingLine[0] === '"' || remainingLine[0] === "'") {
+        let quoteType = remainingLine[0];
+        let value = "";
+
+        cursor++; // Ignore le guillemet ouvrant
+
+        for (; cursor < line.length; cursor++) {
+          if (line[cursor] === "\\") {
+            value += line[++cursor];
+            continue;
+          } else if (line[cursor] === quoteType) {
+            tokens.push({ type: "text", value });
+            cursor++;
+            break;
+          }
+
+          value += line[cursor];
+        }
+
+        if (cursor >= line.length && !line.endsWith(quoteType)) {
+          throw new Error("Unterminated string");
+        }
+
         continue;
       }
 
@@ -100,4 +137,15 @@ export function tokenize(source: string): Token[] {
   }
 
   return tokens;
+}
+
+export function printTokens(tokens: Token[]) {
+  return tokens
+    .map(
+      (t) =>
+        `${t.type}${"value" in t ? `(${t.value})` : ""}${Object.keys(t)
+          .filter((k) => k !== "type" && k !== "value")
+          .map((k) => ` [${k}: ${t[k]}]`)}`
+    )
+    .join("\n");
 }

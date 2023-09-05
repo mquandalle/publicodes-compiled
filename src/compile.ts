@@ -34,6 +34,10 @@ export function compile(parsedPublicodes: ASTPublicodesNode) {
       );
     },
 
+    undefined() {
+      return b.identifier("undefined");
+    },
+
     produit(node, { visit }) {
       return visit({
         type: "operation",
