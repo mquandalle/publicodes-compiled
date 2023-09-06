@@ -6,6 +6,8 @@ export type Token =
   | { type: "reference"; value: string }
   | { type: "indent" }
   | { type: "outdent" }
+  | { type: "paren-open" }
+  | { type: "paren-close" }
   | { type: "list-item" }
   | { type: "key"; value: string };
 
@@ -63,6 +65,18 @@ export function tokenize(source: string): Token[] {
       if (operatorToken) {
         tokens.push({ type: "operator", value: operatorToken[0] });
         cursor += operatorToken[0].length;
+        continue;
+      }
+
+      if (remainingLine[0] === "(") {
+        tokens.push({ type: "paren-open" });
+        cursor++;
+        continue;
+      }
+
+      if (remainingLine[0] === ")") {
+        tokens.push({ type: "paren-close" });
+        cursor++;
         continue;
       }
 

@@ -1,7 +1,7 @@
 année de création: 2023
 statut: "SASU" # youpi pas de doubles guillemets
 chiffre affaires: 20000 €/mois
-charges: 1000 €/mois
+charges: 1 €/mois * ((1 + 2) * 3) * 100
 
 impôt sur les sociétés:
   barème:

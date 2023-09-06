@@ -126,7 +126,7 @@ export function parse(source: string): ASTPublicodesNode {
   }
 
   function parseAdditionSubstration(): ASTNode {
-    let node = parseTerm();
+    let node = parseMultiplicationDivision();
 
     while (index < tokens.length) {
       const token = tokens[index];
@@ -135,7 +135,7 @@ export function parse(source: string): ASTPublicodesNode {
         (token.value === "+" || token.value === "-")
       ) {
         index++;
-        const right = parseTerm();
+        const right = parseMultiplicationDivision();
         node = {
           type: "operation",
           operator: token.value,
@@ -149,8 +149,8 @@ export function parse(source: string): ASTPublicodesNode {
     return node;
   }
 
-  function parseTerm(): ASTNode {
-    let node = parseFactor();
+  function parseMultiplicationDivision(): ASTNode {
+    let node = parseParenthesizedExpression();
 
     while (index < tokens.length) {
       const token = tokens[index];
@@ -159,7 +159,7 @@ export function parse(source: string): ASTPublicodesNode {
         (token.value === "*" || token.value === "/")
       ) {
         index++;
-        const right = parseFactor();
+        const right = parseParenthesizedExpression();
         node = {
           type: "operation",
           operator: token.value,
@@ -173,7 +173,19 @@ export function parse(source: string): ASTPublicodesNode {
     return node;
   }
 
-  function parseFactor(): ASTNode {
+  function parseParenthesizedExpression(): ASTNode {
+    if (tokens[index].type === "paren-open") {
+      index++;
+      const node = parseInlineExpression();
+      if (tokens[index++].type !== "paren-close") {
+        throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
+      }
+      return node;
+    }
+    return parseTerminalNode();
+  }
+
+  function parseTerminalNode(): ASTNode {
     const token = tokens[index++];
     if (token.type === "constant") {
       return { type: "constant", value: token.value, unit: token.unit };
