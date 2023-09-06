@@ -25,14 +25,14 @@ export function tokenize(source: string): Token[] {
   let indentStack: number[] = [];
   let cursor = 0;
 
-  const matchRegex = (regex: RegExp): string | undefined => {
+  function matchRegex(regex: RegExp): string | undefined {
     regex.lastIndex = cursor;
     const matched = regex.exec(source);
     if (matched) {
       cursor += matched[0].length;
       return matched[0];
     }
-  };
+  }
   function matchSingleChar<const C extends string>(char: C): C | undefined {
     const matched = source[cursor] === char;
     if (matched) {
@@ -43,11 +43,13 @@ export function tokenize(source: string): Token[] {
 
   while (cursor < source.length) {
     if (cursor === 0 || matchSingleChar("\n")) {
-      let indent = 0;
-      while (matchSingleChar(" ")) indent++;
+      const spaces = matchRegex(spaceRegex);
+      let indent = spaces ? spaces.length : 0;
       if (matchSingleChar("-")) {
         indent++;
-        while (matchSingleChar(" ")) indent++;
+        const spaces = matchRegex(spaceRegex);
+        if (spaces) indent += spaces.length;
+
         tokens.push({ type: "list-item" });
         indentStack.push(currentIndent);
         currentIndent = indent;
@@ -112,8 +114,7 @@ export function tokenize(source: string): Token[] {
           cursor++;
 
           if (legacyDuplicatedQuotes) {
-            quoteType = invertQuote(quoteType);
-            if (!matchSingleChar(quoteType)) {
+            if (!matchSingleChar(invertQuote(quoteType))) {
               throw new Error("Unterminated legacy string");
             }
           }

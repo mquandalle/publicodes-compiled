@@ -1,6 +1,5 @@
 import { tokenize, type Token } from "./tokenize";
-import { walk } from "zimmerframe";
-import { inferNodeTypes } from "./units";
+import { link } from "./link";
 
 export type ASTNode =
   | { type: "constant"; value: boolean | number | string; unit?: string }
@@ -14,7 +13,7 @@ export type ASTNode =
       tranches: Array<{ taux: ASTNode; plafond?: ASTNode }>;
     };
 
-type ASTRuleNode = { type: "rule"; name: string; value: ASTNode };
+export type ASTRuleNode = { type: "rule"; name: string; value: ASTNode };
 
 export type ASTPublicodesNode = {
   type: "publicodes";
@@ -228,46 +227,5 @@ export function parse(source: string): ASTPublicodesNode {
 
   const parsedProgram = { type: "publicodes", rules: parsedRules } as const;
 
-  // XXX on parcourt l'arbre 2 fois avec resolveName et inferNodeTypes, faisable en 1 fois ?
-  return inferNodeTypes(resolveNames(parsedProgram));
-}
-
-function resolveNames(parsedRules: ASTPublicodesNode) {
-  const allParents = (name) =>
-    name
-      .split(".")
-      .reduce((acc, name) => {
-        const last = acc[acc.length - 1];
-        return [...acc, last ? `${last} . ${name.trim()}` : name.trim()];
-      }, [])
-      .reverse();
-
-  return walk(
-    parsedRules,
-    {},
-    {
-      publicodes(node, { next }) {
-        next({ availableNames: node.rules.map((rule) => rule.name) });
-      },
-      rule: (node, { next, state }) => {
-        next({ ...state, parentsNames: allParents(node.name) });
-      },
-      reference(node, { state: { availableNames, parentsNames } }) {
-        const parentName = parentsNames.find((parent) =>
-          availableNames.includes(`${parent} . ${node.name}`)
-        );
-        if (parentName) {
-          return {
-            type: "reference",
-            name: `${parentName} . ${node.name}`,
-          };
-        }
-        if (availableNames.includes(node.name)) {
-          return node;
-        }
-
-        throw Error(`Unknown reference ${node.name} in ${parentsNames[0]}`);
-      },
-    }
-  );
+  return link(parsedProgram);
 }
