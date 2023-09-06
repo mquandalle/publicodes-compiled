@@ -52,11 +52,12 @@ export function inferNodeTypes(parsedRules) {
       {
         rule(node, { visit }) {
           const rewrittenNode = visit(node.value);
+          const rewrittenNodeUnit = inferedUnits.get(rewrittenNode);
           inferedUnits.set(node, inferedUnits.get(rewrittenNode));
           const rewrittenRule = {
             ...node,
             value: rewrittenNode,
-            unit: rewrittenNode.unit,
+            unit: rewrittenNodeUnit,
           };
           rewrittenRules.set(node, rewrittenRule);
           return rewrittenRule;
@@ -149,6 +150,19 @@ export function inferNodeTypes(parsedRules) {
               },
             };
           }
+        },
+        ["toutes ces conditions"](node) {
+          inferedUnits.set(node, { type: "boolean" });
+          // TODO ensure all conditions are boolean
+        },
+        ["une de ces conditions"](node) {
+          inferedUnits.set(node, { type: "boolean" });
+          // TODO ensure all conditions are boolean
+        },
+        variations(node, { visit }) {
+          const firstConsequence = node.value[0].alors;
+          inferedUnits.set(node, inferedUnits.get(visit(firstConsequence)));
+          // ensure all test are boolean, and convert consequences to the same unit
         },
       }
     );

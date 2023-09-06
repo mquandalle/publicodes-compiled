@@ -75,6 +75,30 @@ export function compile(parsedPublicodes: ASTPublicodesNode) {
         ),
       ]);
     },
+
+    ["une de ces conditions"](node, { visit }) {
+      let res = visit(node.value[0]);
+      for (let i = 1; i < node.value.length; i++) {
+        res = b.logicalExpression("||", res, visit(node.value[i]));
+      }
+      return res;
+    },
+
+    ["toutes ces conditions"](node, { visit }) {
+      let res = visit(node.value[0]);
+      for (let i = 1; i < node.value.length; i++) {
+        res = b.logicalExpression("&&", res, visit(node.value[i]));
+      }
+      return res;
+    },
+
+    variations(node, { visit }) {
+      return b.conditionalExpression(
+        visit(node.value[0].si),
+        visit(node.value[0].alors),
+        visit(node.value[1].sinon)
+      );
+    },
   });
 
   const jsCodeRules = generate(esTree);

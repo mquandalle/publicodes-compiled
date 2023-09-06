@@ -9,9 +9,10 @@ const rawSource = readFileSync(
   path.join(import.meta.dir, "./sasu.publicodes.yaml"),
   "utf8"
 );
+const rawSourceLegacySyntax = rawSource.replace(`"SASU" # youpi`, `"'SASU'" #`);
 const RULE_NAME = "revenu net après impôt";
 
-const interpretedEngine = new Publicodes(yamlParse(rawSource));
+const interpretedEngine = new Publicodes(yamlParse(rawSourceLegacySyntax));
 const compiledEngine = new CompiledPublicodes(rawSource);
 
 if (
@@ -23,7 +24,7 @@ if (
 
 group("transform from source", () => {
   bench("current", () => {
-    new Publicodes(yamlParse(rawSource));
+    new Publicodes(yamlParse(rawSourceLegacySyntax));
   });
   bench("reimplementation", () => {
     new CompiledPublicodes(rawSource);

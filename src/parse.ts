@@ -64,12 +64,15 @@ export function parse(source: string): ASTPublicodesNode {
     }
   }
 
-  function parseList() {
+  function parseList(HACKYparseMechanismsInListItems = false) {
     const list = [];
     while (index < tokens.length && tokens[index].type === "list-item") {
       index++;
+
       if (tokens[index].type === "key") {
-        list.push(parseRecord());
+        list.push(
+          HACKYparseMechanismsInListItems ? parseMechanism() : parseRecord()
+        );
       } else {
         list.push(parseExpression());
       }
@@ -81,11 +84,14 @@ export function parse(source: string): ASTPublicodesNode {
   }
 
   function parseRecord() {
-    const record = {};
+    const record = { type: "record" };
 
     while (index < tokens.length && tokens[index].type === "key") {
       const key = tokens[index++].value;
       record[key] = parseExpression();
+    }
+    if (tokens[index].type === "outdent") {
+      index++;
     }
     return record;
   }
@@ -187,23 +193,25 @@ export function parse(source: string): ASTPublicodesNode {
       throw new Error(`Unexpected token ${mechanismName}`);
     }
 
-    const mechanismNode: ASTNode = { type: mechanismName.value } as any;
+    let res;
 
-    index++; // skip the 'indent' token for mechanisms parameters
-
-    while (index < tokens.length && tokens[index].type !== "outdent") {
-      const token = tokens[index++];
-      if (token.type === "key") {
-        mechanismNode[token.value] = parseExpression();
-      } else {
-        throw new Error(`Unexpected token ${JSON.stringify(token)}`);
-      }
+    if (tokens[index].type === "indent") {
+      index++; // skip the 'indent' token for mechanisms parameters
+      const args = parseRecord();
+      res = { ...args, type: mechanismName.value };
+    } else if (tokens[index].type === "list-item") {
+      const HACKYparseMechanismsInListItems =
+        mechanismName.value === "une de ces conditions" ||
+        mechanismName.value === "toutes ces conditions";
+      res = {
+        type: mechanismName.value,
+        value: parseList(HACKYparseMechanismsInListItems),
+      };
+    } else {
+      throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
     }
-
-    index++; // Skip the 'outdent' token mechanisms parameters
     index++; // Skip the 'outdent' token for the mechanism itself
-
-    return mechanismNode;
+    return res;
   }
 
   const parsedProgram = { type: "publicodes", rules: parsedRules } as const;

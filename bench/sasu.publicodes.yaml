@@ -1,7 +1,7 @@
+année de création: 2023
+statut: "SASU" # youpi pas de doubles guillemets
 chiffre affaires: 20000 €/mois
 charges: 1000 €/mois
-
-proportion salaire: 50%
 
 impôt sur les sociétés:
   barème:
@@ -22,9 +22,25 @@ dividendes . prélèvement forfaitaire unique:
     assiette: brut
     taux: 30%
 
+proportion salaire: 50%
 salaire:
 salaire . total: chiffre affaires * proportion salaire
 salaire . net: total - charges
-salaire . charges: total * 0.45
+salaire . charges:
+  produit:
+    assiette: total
+    taux:
+      variations:
+        - si: éligible acre
+          alors: 20%
+        - sinon: 40%
+
+salaire . éligible acre:
+  toutes ces conditions:
+    - année de création >= 2022
+    - oui
+    - une de ces conditions:
+        - statut = "SASU"
+        - statut = "EURL"
 
 revenu net après impôt: salaire . net + dividendes . net
