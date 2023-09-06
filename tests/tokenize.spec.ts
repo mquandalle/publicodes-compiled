@@ -1,15 +1,16 @@
 import { expect, test } from "bun:test";
 import { tokenize, printTokens } from "../src/tokenize";
 
+const snap = (intput: string) => printTokens(tokenize(intput));
+
 test("Tokenize", () => {
-  const tokens = tokenize(`
-chiffre affaires: 20000 €/mois
-`);
-  expect(printTokens(tokens)).toMatchSnapshot();
+  const canonicalStringDeclaration = "string: 'hello'";
+  expect(snap(`string: 'hello'`)).toMatchSnapshot();
+  expect(snap(`string: "hello"`)).toEqual(snap(canonicalStringDeclaration));
+  expect(snap(`string: "'hello'"`)).toEqual(snap(canonicalStringDeclaration));
+  expect(snap(`string: '"hello"'`)).toEqual(snap(canonicalStringDeclaration));
 
-  const tokens2 = tokenize(`localisation . ZFE: oui`);
-  expect(printTokens(tokens2)).toMatchSnapshot();
-
-  const tokens3 = tokenize(`âge >= 6`);
-  expect(printTokens(tokens3)).toMatchSnapshot();
+  expect(snap(`chiffre affaires: 20000 €/mois`)).toMatchSnapshot();
+  expect(snap(`localisation . ZFE: oui`)).toMatchSnapshot();
+  expect(snap(`âge >= 6`)).toMatchSnapshot();
 });

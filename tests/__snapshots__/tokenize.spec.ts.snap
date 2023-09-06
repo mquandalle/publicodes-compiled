@@ -1,16 +1,21 @@
 // Bun Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Tokenize 1`] = `
+"key(string)
+text(hello)"
+`;
+
+exports[`Tokenize 2`] = `
 "key(chiffre affaires)
 constant(20000) [unit: €/mois]"
 `;
 
-exports[`Tokenize 2`] = `
+exports[`Tokenize 3`] = `
 "key(localisation . ZFE)
 boolean(true)"
 `;
 
-exports[`Tokenize 3`] = `
+exports[`Tokenize 4`] = `
 "reference(âge)
 operator(>=)
 constant(6)"

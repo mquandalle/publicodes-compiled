@@ -88,10 +88,19 @@ export function tokenize(source: string): Token[] {
       }
 
       if (remainingLine[0] === '"' || remainingLine[0] === "'") {
-        let quoteType = remainingLine[0];
+        let quoteType = remainingLine[0] as "'" | '"';
         let value = "";
 
         cursor++; // Ignore le guillemet ouvrant
+
+        let legacyDuplicatedQuotes = false;
+
+        const invertQuote = (q: '"' | "'") => (q === '"' ? "'" : '"');
+        if (remainingLine[1] === invertQuote(quoteType)) {
+          legacyDuplicatedQuotes = true;
+          cursor++; // Ignore le guillemet ouvrant
+          quoteType = invertQuote(quoteType);
+        }
 
         for (; cursor < line.length; cursor++) {
           if (line[cursor] === "\\") {
@@ -100,6 +109,15 @@ export function tokenize(source: string): Token[] {
           } else if (line[cursor] === quoteType) {
             tokens.push({ type: "text", value });
             cursor++;
+
+            if (legacyDuplicatedQuotes) {
+              quoteType = invertQuote(quoteType);
+              if (line[cursor] !== quoteType) {
+                throw new Error("Unterminated legacy string");
+              }
+              cursor++; // Ignore le guillemet fermant
+            }
+
             break;
           }
 
