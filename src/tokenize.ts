@@ -11,171 +11,164 @@ export type Token =
   | { type: "list-item" }
   | { type: "key"; value: string };
 
-const ruleRegexStr = "\\p{L}[\\p{L}\\s\\.']*";
-const refRegex = new RegExp("^" + ruleRegexStr, "u");
-const keyRegexStr = new RegExp("^" + ruleRegexStr + ":", "u");
-const booleanRegex = /^(oui|non)/;
-const numberRegex = /^[0-9]+(\.[0-9]+)?/;
-const unitRegex = /^\s*([a-z€]+(\/[a-z€]+)?)/;
-const infixOperatorRegex = /^(<=|>=|<|>|=|\+|\-|\*|\/)/;
+const ruleNameRegex = /\p{L}([\p{L}\x20\.']*\p{L})?/uy;
+const booleanRegex = /(oui|non)/y;
+const numberRegex = /[0-9]+(\.[0-9]+)?/y;
+const unitRegex = /[a-z€]+(\/[a-z€]+)?/y;
+const infixOperatorRegex = /(<=|>=|<|>|=|\+|\-|\*|\/)/y;
+const commentRegex = /#.*/y;
+const spaceRegex = /\x20+/y;
 
 export function tokenize(source: string): Token[] {
   let tokens: Token[] = [];
   let currentIndent = 0;
   let indentStack: number[] = [];
+  let cursor = 0;
 
-  for (const line of source.split("\n")) {
-    let indent = 0;
-    let cursor = 0;
+  const matchRegex = (regex: RegExp): string | undefined => {
+    regex.lastIndex = cursor;
+    const matched = regex.exec(source);
+    if (matched) {
+      cursor += matched[0].length;
+      return matched[0];
+    }
+  };
+  function matchSingleChar<const C extends string>(char: C): C | undefined {
+    const matched = source[cursor] === char;
+    if (matched) {
+      cursor++;
+      return char;
+    }
+  }
 
-    while (line[indent] === " ") indent++;
-    if (line[indent] === "-") {
-      indent++;
-      while (line[indent] === " ") indent++;
-      tokens.push({ type: "list-item" });
-      indentStack.push(currentIndent);
-      currentIndent = indent;
-    } else if (indent > currentIndent) {
-      tokens.push({ type: "indent" });
-      indentStack.push(currentIndent);
-      currentIndent = indent;
-    } else {
-      while (indent < currentIndent) {
-        tokens.push({ type: "outdent" });
-        currentIndent = indentStack.pop() || 0;
+  while (cursor < source.length) {
+    if (cursor === 0 || matchSingleChar("\n")) {
+      let indent = 0;
+      while (matchSingleChar(" ")) indent++;
+      if (matchSingleChar("-")) {
+        indent++;
+        while (matchSingleChar(" ")) indent++;
+        tokens.push({ type: "list-item" });
+        indentStack.push(currentIndent);
+        currentIndent = indent;
+      } else if (indent > currentIndent) {
+        tokens.push({ type: "indent" });
+        indentStack.push(currentIndent);
+        currentIndent = indent;
+      } else {
+        while (indent < currentIndent) {
+          tokens.push({ type: "outdent" });
+          currentIndent = indentStack.pop() || 0;
+        }
+      }
+      if (cursor > 0) {
+        continue;
       }
     }
 
-    cursor += indent;
+    if (matchRegex(spaceRegex) || matchRegex(commentRegex)) {
+      continue;
+    }
 
-    while (cursor < line.length) {
-      let remainingLine = line.slice(cursor);
+    const operatorToken = matchRegex(infixOperatorRegex);
+    if (operatorToken) {
+      tokens.push({ type: "operator", value: operatorToken[0] });
+      continue;
+    }
 
-      const spaceToken = remainingLine.match(/^\s+/);
-      if (spaceToken) {
-        cursor += spaceToken[0].length;
-        continue;
+    if (matchSingleChar("(")) {
+      tokens.push({ type: "paren-open" });
+      continue;
+    }
+
+    if (matchSingleChar(")")) {
+      tokens.push({ type: "paren-close" });
+      continue;
+    }
+
+    const booleanToken = matchRegex(booleanRegex);
+    if (booleanToken) {
+      tokens.push({ type: "boolean", value: booleanToken === "oui" });
+      continue;
+    }
+
+    let quoteType = matchSingleChar('"') || matchSingleChar("'");
+    if (quoteType) {
+      let value = "";
+      let legacyDuplicatedQuotes = false;
+
+      const invertQuote = (q: '"' | "'") => (q === '"' ? "'" : '"');
+      if (matchSingleChar(invertQuote(quoteType))) {
+        legacyDuplicatedQuotes = true;
+        quoteType = invertQuote(quoteType);
       }
 
-      if (remainingLine.match(/^#/)) {
-        break;
-      }
+      for (; cursor < source.length; cursor++) {
+        if (source[cursor] === "\\") {
+          value += source[++cursor];
+          continue;
+        } else if (source[cursor] === quoteType) {
+          tokens.push({ type: "text", value });
+          cursor++;
 
-      const operatorToken = remainingLine.match(infixOperatorRegex);
-      if (operatorToken) {
-        tokens.push({ type: "operator", value: operatorToken[0] });
-        cursor += operatorToken[0].length;
-        continue;
-      }
-
-      if (remainingLine[0] === "(") {
-        tokens.push({ type: "paren-open" });
-        cursor++;
-        continue;
-      }
-
-      if (remainingLine[0] === ")") {
-        tokens.push({ type: "paren-close" });
-        cursor++;
-        continue;
-      }
-
-      const booleanToken = remainingLine.match(booleanRegex);
-      if (booleanToken) {
-        tokens.push({ type: "boolean", value: booleanToken[0] === "oui" });
-        cursor += booleanToken[0].length;
-        continue;
-      }
-
-      if (remainingLine[0] === '"' || remainingLine[0] === "'") {
-        let quoteType = remainingLine[0] as "'" | '"';
-        let value = "";
-
-        cursor++; // Ignore le guillemet ouvrant
-
-        let legacyDuplicatedQuotes = false;
-
-        const invertQuote = (q: '"' | "'") => (q === '"' ? "'" : '"');
-        if (remainingLine[1] === invertQuote(quoteType)) {
-          legacyDuplicatedQuotes = true;
-          cursor++; // Ignore le guillemet ouvrant
-          quoteType = invertQuote(quoteType);
-        }
-
-        for (; cursor < line.length; cursor++) {
-          if (line[cursor] === "\\") {
-            value += line[++cursor];
-            continue;
-          } else if (line[cursor] === quoteType) {
-            tokens.push({ type: "text", value });
-            cursor++;
-
-            if (legacyDuplicatedQuotes) {
-              quoteType = invertQuote(quoteType);
-              if (line[cursor] !== quoteType) {
-                throw new Error("Unterminated legacy string");
-              }
-              cursor++; // Ignore le guillemet fermant
+          if (legacyDuplicatedQuotes) {
+            quoteType = invertQuote(quoteType);
+            if (!matchSingleChar(quoteType)) {
+              throw new Error("Unterminated legacy string");
             }
-
-            break;
           }
-
-          value += line[cursor];
+          break;
         }
 
-        if (cursor >= line.length && !line.endsWith(quoteType)) {
-          throw new Error("Unterminated string");
-        }
-
-        continue;
+        value += source[cursor];
       }
 
-      const keyToken = remainingLine.match(keyRegexStr);
-      if (keyToken) {
-        tokens.push({ type: "key", value: keyToken[0].slice(0, -1) });
-        cursor += keyToken[0].length;
-        continue;
+      if (cursor > source.length) {
+        throw new Error("Unterminated string");
       }
 
-      const numberToken = remainingLine.match(numberRegex);
-      if (numberToken) {
-        remainingLine = remainingLine.slice(numberToken[0].length);
-        const unit = remainingLine.match(unitRegex);
-        const percentage = remainingLine.match(/^\s*%/);
-        const value = parseFloat(numberToken[0]);
-        if (unit) {
-          tokens.push({ type: "constant", value, unit: unit[1] });
-          cursor += numberToken[0].length + unit[0].length;
-        } else if (percentage) {
-          tokens.push({ type: "constant", value: value / 100 });
-          cursor += numberToken[0].length + percentage[0].length;
-        } else {
-          tokens.push({ type: "constant", value });
-          cursor += numberToken[0].length;
-        }
-        continue;
-      }
-
-      const refToken = remainingLine.match(refRegex);
-      if (refToken) {
-        tokens.push({ type: "reference", value: refToken[0].trim() });
-        cursor += refToken[0].length;
-        continue;
-      }
-
-      throw new Error(`Cannot tokenize : "${remainingLine}"`);
+      continue;
     }
+    const refToken = matchRegex(ruleNameRegex);
+    if (refToken) {
+      matchRegex(spaceRegex);
+      if (matchSingleChar(":")) {
+        tokens.push({ type: "key", value: refToken });
+      } else {
+        tokens.push({ type: "reference", value: refToken });
+      }
+      continue;
+    }
+
+    const numberToken = matchRegex(numberRegex);
+    if (numberToken) {
+      matchRegex(spaceRegex);
+      const unit = matchRegex(unitRegex);
+      const percentage = matchSingleChar("%");
+      const value = parseFloat(numberToken);
+      if (unit) {
+        tokens.push({ type: "constant", value, unit: unit });
+      } else if (percentage) {
+        tokens.push({ type: "constant", value: value / 100 });
+      } else {
+        tokens.push({ type: "constant", value });
+      }
+      continue;
+    }
+
+    throw new Error(`Cannot tokenize`);
   }
 
   return tokens;
 }
 
-export function printTokens(tokens: Token[]) {
+export function printTokens(tokens: Token[], { lineNumbers = false } = {}) {
   return tokens
     .map(
-      (t) =>
-        `${t.type}${"value" in t ? `(${t.value})` : ""}${Object.keys(t)
+      (t, i) =>
+        `${lineNumbers ? i.toString().padEnd(5, " ") : ""}${t.type}${
+          "value" in t ? `(${t.value})` : ""
+        }${Object.keys(t)
           .filter((k) => k !== "type" && k !== "value")
           .map((k) => ` [${k}: ${t[k]}]`)}`
     )
