@@ -1,6 +1,18 @@
 import { tokenize, type Token } from "./tokenize";
 import { link } from "./link";
 
+const mechanismSignatures = {
+  "une de ces conditions": [],
+  "toutes ces conditions": [],
+  variations: [],
+  produit: ["assiette", "taux"],
+  barème: ["assiette", "tranches"],
+};
+
+const mechanismNames = Object.keys(mechanismSignatures);
+
+const textFields = ["description", "titre"];
+
 export type ASTNode =
   | { type: "constant"; value: boolean | number | string; unit?: string }
   | { type: "undefined" }
@@ -23,22 +35,34 @@ export type ASTPublicodesNode = {
 export function parse(source: string): ASTPublicodesNode {
   const tokens: Token[] = tokenize(source);
   const parsedRules: ASTRuleNode[] = [];
+  let currentRuleNode;
   let index = 0;
 
   while (index < tokens.length) {
-    const currentToken = tokens[index++];
+    const currentToken = tokens[index];
     if (currentToken.type === "outdent") {
+      index++;
       continue;
     } else if (currentToken.type === "key") {
-      const value =
-        tokens[index]?.type === "key"
-          ? {
-              type: "undefined",
-            }
-          : parseExpression();
-      parsedRules.push({ type: "rule", name: currentToken.value, value });
+      parseRule();
     } else {
       throw new Error(`Unexpected token ${currentToken.type}`);
+    }
+  }
+
+  function parseRule() {
+    const ruleName = tokens[index++].value;
+    // a new rule, this one is empty
+    if (tokens[index]?.type === "key") {
+      parsedRules.push({
+        type: "rule",
+        name: ruleName,
+        value: { type: "undefined" },
+      });
+    } else {
+      currentRuleNode = { type: "rule", name: ruleName };
+      currentRuleNode.value = parseExpression();
+      parsedRules.push(currentRuleNode);
     }
   }
 
@@ -46,16 +70,10 @@ export function parse(source: string): ASTPublicodesNode {
     switch (tokens[index]?.type) {
       case "indent":
         index++; // skip the 'indent' token
-        return parseMechanism();
+        return parseRecord();
       case "key":
         index++;
-        if (tokens[index]?.type === "indent") {
-          index++;
-          return parseRecord();
-        } else {
-          return parseInlineExpression();
-        }
-
+        return parseExpression();
       case "list-item":
         return parseList();
       default:
@@ -63,15 +81,13 @@ export function parse(source: string): ASTPublicodesNode {
     }
   }
 
-  function parseList(HACKYparseMechanismsInListItems = false) {
+  function parseList() {
     const list = [];
     while (index < tokens.length && tokens[index].type === "list-item") {
       index++;
 
       if (tokens[index].type === "key") {
-        list.push(
-          HACKYparseMechanismsInListItems ? parseMechanism() : parseRecord()
-        );
+        list.push(parseRecord());
       } else {
         list.push(parseExpression());
       }
@@ -83,16 +99,46 @@ export function parse(source: string): ASTPublicodesNode {
   }
 
   function parseRecord() {
-    const record = { type: "record" };
-
+    const entries = [];
+    let ok = false;
     while (index < tokens.length && tokens[index].type === "key") {
       const key = tokens[index++].value;
-      record[key] = parseExpression();
+      if (key === "barème") ok = true;
+      if (textFields.includes(key)) {
+        // TODO ensure the token is a string
+        currentRuleNode[key] = tokens[index++].value;
+      } else {
+        entries.push([key, parseExpression()]);
+      }
     }
     if (tokens[index].type === "outdent") {
       index++;
     }
-    return record;
+
+    if (entries.length === 0) {
+      throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
+    }
+
+    const mechanismsEntries = entries.filter(([key]) =>
+      mechanismNames.includes(key)
+    );
+
+    if (mechanismsEntries.length > 1) {
+      throw new Error(`chainable mechanisms not yet implemented`);
+    }
+
+    if (mechanismsEntries.length === 1) {
+      const mechanismName = mechanismsEntries[0][0];
+      const mechanismKeys = mechanismSignatures[mechanismName];
+      const value = mechanismsEntries[0][1];
+      if (mechanismKeys.length === 0) {
+        return { type: mechanismName, value };
+      } else {
+        return { ...value, type: mechanismName };
+      }
+    } else {
+      return { ...Object.fromEntries(entries), type: "record" };
+    }
   }
 
   function parseInlineExpression(): ASTNode {
@@ -196,33 +242,6 @@ export function parse(source: string): ASTPublicodesNode {
       return { type: "constant", value: token.value };
     }
     throw new Error(`Unexpected token ${JSON.stringify(token)}`);
-  }
-
-  function parseMechanism(): ASTNode {
-    const mechanismName = tokens[index++];
-    if (mechanismName.type !== "key") {
-      throw new Error(`Unexpected token ${mechanismName}`);
-    }
-
-    let res;
-
-    if (tokens[index].type === "indent") {
-      index++; // skip the 'indent' token for mechanisms parameters
-      const args = parseRecord();
-      res = { ...args, type: mechanismName.value };
-    } else if (tokens[index].type === "list-item") {
-      const HACKYparseMechanismsInListItems =
-        mechanismName.value === "une de ces conditions" ||
-        mechanismName.value === "toutes ces conditions";
-      res = {
-        type: mechanismName.value,
-        value: parseList(HACKYparseMechanismsInListItems),
-      };
-    } else {
-      throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
-    }
-    index++; // Skip the 'outdent' token for the mechanism itself
-    return res;
   }
 
   const parsedProgram = { type: "publicodes", rules: parsedRules } as const;

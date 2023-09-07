@@ -4,6 +4,9 @@ chiffre affaires: 20000 €/mois
 charges: 1 €/mois * ((1 + 2) * 3) * 100
 
 impôt sur les sociétés:
+  description: |
+    L'impôt sur les sociétés est un impôt direct français qui s'applique aux bénéfices des entreprises.
+    Il est calculé sur le bénéfice net comptπable, c'est-à-dire la différence entre les produits et les charges de l'exercice.
   barème:
     assiette: bénéfice
     tranches:
@@ -27,6 +30,7 @@ salaire:
 salaire . total: chiffre affaires * proportion salaire
 salaire . net: total - charges
 salaire . charges:
+  titre: Les charges sociales
   produit:
     assiette: total
     taux:

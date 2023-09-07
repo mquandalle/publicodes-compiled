@@ -4,10 +4,10 @@ export type Token =
   | { type: "text"; value: string }
   | { type: "operator"; value: string }
   | { type: "reference"; value: string }
-  | { type: "indent" }
-  | { type: "outdent" }
   | { type: "paren-open" }
   | { type: "paren-close" }
+  | { type: "indent" }
+  | { type: "outdent" }
   | { type: "list-item" }
   | { type: "key"; value: string };
 
@@ -18,6 +18,7 @@ const unitRegex = /[a-z€]+(\/[a-z€]+)?/y;
 const infixOperatorRegex = /(<=|>=|<|>|=|\+|\-|\*|\/)/y;
 const commentRegex = /#.*/y;
 const spaceRegex = /\x20+/y;
+const startMultiLineStringRegex = /\x20*\|\x20*\n/y;
 
 export function tokenize(source: string): Token[] {
   let tokens: Token[] = [];
@@ -135,6 +136,9 @@ export function tokenize(source: string): Token[] {
       matchRegex(spaceRegex);
       if (matchSingleChar(":")) {
         tokens.push({ type: "key", value: refToken });
+        if (matchRegex(startMultiLineStringRegex)) {
+          multiLineString();
+        }
       } else {
         tokens.push({ type: "reference", value: refToken });
       }
@@ -158,6 +162,25 @@ export function tokenize(source: string): Token[] {
     }
 
     throw new Error(`Cannot tokenize`);
+  }
+
+  function multiLineString() {
+    const endMultiLineString = RegExp(
+      "(.+?)\\n\\x20{" + currentIndent + "}([^\\x20\\n]|$)",
+      "ys"
+    );
+    endMultiLineString.lastIndex = cursor;
+    const multilineString = endMultiLineString.exec(source);
+
+    if (!multilineString) {
+      throw new Error("Unterminated multi-line string");
+    }
+    const length = multilineString[1].length;
+    const value = source
+      .slice(cursor, cursor + length)
+      .replace(/(^|\n)\x20*/g, "$1");
+    cursor += multilineString[1].length;
+    tokens.push({ type: "text", value });
   }
 
   return tokens;
