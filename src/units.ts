@@ -24,9 +24,9 @@ export function inferUnit(
   if (left.type !== "number" || right.type !== "number") {
     throw new Error("Incorrect units");
   }
-  if (operator === "*" && left.unit === undefined)
+  if (operator === "*" && left.unit === "")
     return { type: "number", unit: right.unit };
-  if (operator === "*" && right.unit === undefined)
+  if (operator === "*" && right.unit === "")
     return { type: "number", unit: left.unit };
   throw new Error("Not implemented");
 }

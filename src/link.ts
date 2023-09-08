@@ -154,6 +154,9 @@ export function link(parsedRules: ASTPublicodesNode) {
           inferedUnits.set(node, { type: "boolean" });
           // TODO ensure all conditions are boolean
         },
+        ["applicable si"](node, { visit }) {
+          inferedUnits.set(node, inferedUnits.get(visit(node.value)));
+        },
         variations(node, { visit }) {
           const firstCondition = visit(node.value[0].si);
           const firstConsequence = node.value[0].alors;

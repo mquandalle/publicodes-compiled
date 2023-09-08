@@ -7,7 +7,8 @@ text(hello)"
 
 exports[`Tokenize 2`] = `
 "key(chiffre affaires)
-constant(20000) [unit: €/mois]"
+constant(20000)
+unit(€/mois)"
 `;
 
 exports[`Tokenize 3`] = `

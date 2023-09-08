@@ -5,13 +5,35 @@ const mechanismSignatures = {
   "une de ces conditions": [],
   "toutes ces conditions": [],
   variations: [],
+  plafond: [],
+  "applicable si": [],
+  somme: [],
+  valeur: [],
   produit: ["assiette", "taux"],
   barème: ["assiette", "tranches"],
 };
 
 const mechanismNames = Object.keys(mechanismSignatures);
 
-const textFields = ["description", "titre"];
+export const keysWithExpression = new Set([
+  ...mechanismNames,
+  ...Object.values(mechanismSignatures).flat(),
+  ..."abattement, si, alors, sinon, applicable si, assiette, avec, commune, grille, intercommunalité, nom, non applicable si, par défaut, par, plafond, plancher, possibilités, produit, règle, remplace, rend non applicable, sauf dans, somme, taux, toutes ces conditions, tranches, une de ces conditions, unité, valeur, variations".split(
+    ", "
+  ),
+]);
+
+const chainableMecanisms = ["applicable si", "plancher", "plafond"];
+
+const textFields = [
+  "description",
+  "titre",
+  "remplace",
+  "lien",
+  "type",
+  "question",
+  "nom",
+];
 
 export type ASTNode =
   | { type: "constant"; value: boolean | number | string; unit?: string }
@@ -46,6 +68,7 @@ export function parse(source: string): ASTPublicodesNode {
     } else if (currentToken.type === "key") {
       parseRule();
     } else {
+      console.log(currentToken);
       throw new Error(`Unexpected token ${currentToken.type}`);
     }
   }
@@ -92,18 +115,13 @@ export function parse(source: string): ASTPublicodesNode {
         list.push(parseExpression());
       }
     }
-    if (tokens[index].type === "outdent") {
-      index++;
-    }
     return list;
   }
 
   function parseRecord() {
     const entries = [];
-    let ok = false;
     while (index < tokens.length && tokens[index].type === "key") {
       const key = tokens[index++].value;
-      if (key === "barème") ok = true;
       if (textFields.includes(key)) {
         // TODO ensure the token is a string
         currentRuleNode[key] = tokens[index++].value;
@@ -111,7 +129,14 @@ export function parse(source: string): ASTPublicodesNode {
         entries.push([key, parseExpression()]);
       }
     }
-    if (tokens[index].type === "outdent") {
+    if (
+      index < tokens.length &&
+      tokens[index].type !== "outdent" &&
+      tokens[index].type !== "list-item"
+    ) {
+      throw new Error(`Expected token at ${index}`);
+    }
+    if (index < tokens.length && tokens[index].type === "outdent") {
       index++;
     }
 
@@ -122,23 +147,42 @@ export function parse(source: string): ASTPublicodesNode {
     const mechanismsEntries = entries.filter(([key]) =>
       mechanismNames.includes(key)
     );
-
-    if (mechanismsEntries.length > 1) {
-      throw new Error(`chainable mechanisms not yet implemented`);
-    }
-
-    if (mechanismsEntries.length === 1) {
-      const mechanismName = mechanismsEntries[0][0];
-      const mechanismKeys = mechanismSignatures[mechanismName];
-      const value = mechanismsEntries[0][1];
-      if (mechanismKeys.length === 0) {
-        return { type: mechanismName, value };
-      } else {
-        return { ...value, type: mechanismName };
-      }
-    } else {
+    if (mechanismsEntries.length !== entries.length) {
       return { ...Object.fromEntries(entries), type: "record" };
     }
+    const nonChainableMechanism = mechanismsEntries.filter(
+      ([key]) => !chainableMecanisms.includes(key)
+    );
+    const chainableMechanisms = mechanismsEntries.filter(([key]) =>
+      chainableMecanisms.includes(key)
+    );
+
+    if (nonChainableMechanism.length !== 1) {
+      console.log(parsedRules);
+      throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
+    }
+
+    let node;
+    const currentMechanism = nonChainableMechanism[0];
+    const mechanismName = currentMechanism[0];
+    const mechanismKeys = mechanismSignatures[mechanismName];
+    const value = nonChainableMechanism[0][1];
+    if (mechanismName === "valeur") {
+      node = value;
+    } else if (mechanismKeys.length === 0) {
+      node = { type: mechanismName, value };
+    } else {
+      node = { ...value, type: mechanismName };
+    }
+    for (let chainableMechanism of chainableMechanisms) {
+      const mechanismName = chainableMechanism[0];
+      node = {
+        type: mechanismName,
+        [mechanismName]: chainableMechanism[1],
+        value: node,
+      };
+    }
+    return node;
   }
 
   function parseInlineExpression(): ASTNode {
@@ -233,7 +277,14 @@ export function parse(source: string): ASTPublicodesNode {
   function parseTerminalNode(): ASTNode {
     const token = tokens[index++];
     if (token.type === "constant") {
-      return { type: "constant", value: token.value, unit: token.unit };
+      if (tokens[index]?.type === "unit") {
+        return {
+          type: "constant",
+          value: token.value,
+          unit: tokens[index++].value,
+        };
+      }
+      return { type: "constant", value: token.value, unit: "" };
     } else if (token.type === "reference") {
       return { type: "reference", name: token.value };
     } else if (token.type === "text") {
@@ -246,5 +297,6 @@ export function parse(source: string): ASTPublicodesNode {
 
   const parsedProgram = { type: "publicodes", rules: parsedRules } as const;
 
+  // return parsedProgram;
   return link(parsedProgram);
 }
