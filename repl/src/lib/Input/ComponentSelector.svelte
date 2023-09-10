@@ -12,15 +12,8 @@
 	 * }>>} */
 	const dispatch = createEventDispatcher();
 
-	const {
-		files,
-		handle_select,
-		module_editor,
-		rebundle,
-		selected,
-		selected_name,
-		EDITOR_STATE_MAP
-	} = get_repl_context();
+	const { files, handle_select, module_editor, selected, selected_name, EDITOR_STATE_MAP } =
+		get_repl_context();
 
 	/** @type {string | null} */
 	let editing_name = null;
@@ -101,8 +94,6 @@
 		await tick();
 
 		$module_editor?.focus();
-
-		rebundle();
 	}
 
 	/**
@@ -150,8 +141,6 @@
 		input_value = file.name;
 
 		handle_select(editing_name);
-
-		rebundle();
 
 		dispatch('add', { files: $files, diff: file });
 

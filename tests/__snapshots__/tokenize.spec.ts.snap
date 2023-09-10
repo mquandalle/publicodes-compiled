@@ -7,7 +7,7 @@ text(hello)"
 
 exports[`Tokenize 2`] = `
 "key(chiffre affaires)
-constant(20000)
+number(20000)
 unit(€/mois)"
 `;
 
@@ -19,5 +19,5 @@ boolean(true)"
 exports[`Tokenize 4`] = `
 "reference(âge)
 operator(>=)
-constant(6)"
+number(6)"
 `;

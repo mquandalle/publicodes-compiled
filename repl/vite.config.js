@@ -4,7 +4,10 @@ import { sveltekit } from '@sveltejs/kit/vite';
 const config = {
 	plugins: [sveltekit()],
 	resolve: {
-		dedupe: ['@codemirror/state', '@codemirror/language', '@codemirror/view']
+		dedupe: ['@codemirror/state', '@codemirror/language', '@codemirror/view'],
+		alias: {
+			'@bench': '../bench'
+		}
 	},
 	server: {
 		fs: {

@@ -1,18 +1,18 @@
 import { keysWithExpression } from "./parse";
 
 export type Token =
-  | { type: "constant"; value: number; unit?: string }
+  | { type: "number"; value: number }
   | { type: "boolean"; value: boolean }
   | { type: "text"; value: string }
   | { type: "operator"; value: string }
   | { type: "reference"; value: string }
+  | { type: "unit"; value: string }
+  | { type: "key"; value: string }
   | { type: "paren-open" }
   | { type: "paren-close" }
   | { type: "indent" }
   | { type: "outdent" }
-  | { type: "list-item" }
-  | { type: "unit"; value: string }
-  | { type: "key"; value: string };
+  | { type: "list-item" };
 
 const ruleNameRegex = /[\p{L}$](([$\p{L}\x20\.'0-9]|\S-\S)*[\p{L}$0-9])?/uy;
 const booleanRegex = /(oui|non)/y;
@@ -23,17 +23,26 @@ const endOfLine = /.*/y;
 const spaceRegex = /\x20+/y;
 const startMultiLineStringRegex = /\x20*\|\x20*\n/y;
 
-export function tokenize(source: string): Token[] {
+type TokenWithLoc = Token & { start?: number; end?: number };
+
+export function tokenize(
+  source: string,
+  { withLoc = false } = {}
+): TokenWithLoc[] {
   let tokens: Token[] = [];
   let currentIndent = 0;
   let indentStack: number[] = [];
   let isListStack: boolean[] = [];
   let cursor = 0;
+  let prevCursorPos = 0;
 
   function matchRegex(regex: RegExp): string | undefined {
     regex.lastIndex = cursor;
     const matched = regex.exec(source);
     if (matched) {
+      if (withLoc) {
+        prevCursorPos = cursor;
+      }
       cursor += matched[0].length;
       return matched[0];
     }
@@ -41,8 +50,18 @@ export function tokenize(source: string): Token[] {
   function matchSingleChar<const C extends string>(char: C): C | undefined {
     const matched = source[cursor] === char;
     if (matched) {
+      if (withLoc) {
+        prevCursorPos = cursor;
+      }
       cursor++;
       return char;
+    }
+  }
+  function push(token: Token) {
+    if (withLoc) {
+      tokens.push({ ...token, start: prevCursorPos, end: cursor });
+    } else {
+      tokens.push(token);
     }
   }
 
@@ -53,26 +72,23 @@ export function tokenize(source: string): Token[] {
       if (matchSingleChar("-")) {
         indent++;
         const spaces = matchRegex(spaceRegex);
-        if (spaces) indent += spaces.length;
+        indent += spaces ? spaces.length : 0;
 
-        while (indent < currentIndent) {
-          currentIndent = indentStack.pop() || 0;
-        }
         if (indent > currentIndent) {
           indentStack.push(currentIndent);
           isListStack.push(true);
           currentIndent = indent;
         }
-        tokens.push({ type: "list-item" });
+        push({ type: "list-item" });
       } else if (indent > currentIndent) {
-        tokens.push({ type: "indent" });
+        push({ type: "indent" });
         indentStack.push(currentIndent);
         isListStack.push(false);
         currentIndent = indent;
       } else {
         while (indent < currentIndent) {
           if (!isListStack.pop()) {
-            tokens.push({ type: "outdent" });
+            push({ type: "outdent" });
           }
           currentIndent = indentStack.pop() || 0;
         }
@@ -93,23 +109,23 @@ export function tokenize(source: string): Token[] {
 
     const operatorToken = matchRegex(infixOperatorRegex);
     if (operatorToken) {
-      tokens.push({ type: "operator", value: operatorToken });
+      push({ type: "operator", value: operatorToken });
       continue;
     }
 
     if (matchSingleChar("(")) {
-      tokens.push({ type: "paren-open" });
+      push({ type: "paren-open" });
       continue;
     }
 
     if (matchSingleChar(")")) {
-      tokens.push({ type: "paren-close" });
+      push({ type: "paren-close" });
       continue;
     }
 
     const booleanToken = matchRegex(booleanRegex);
     if (booleanToken) {
-      tokens.push({ type: "boolean", value: booleanToken === "oui" });
+      push({ type: "boolean", value: booleanToken === "oui" });
       continue;
     }
 
@@ -129,7 +145,10 @@ export function tokenize(source: string): Token[] {
           value += source[++cursor];
           continue;
         } else if (source[cursor] === quoteType) {
-          tokens.push({ type: "text", value });
+          push({ type: "text", value });
+          if (withLoc) {
+            tokens[tokens.length - 1].end += 1;
+          }
           cursor++;
 
           if (legacyDuplicatedQuotes) {
@@ -153,7 +172,7 @@ export function tokenize(source: string): Token[] {
     if (refToken) {
       matchRegex(spaceRegex);
       if (matchSingleChar(":")) {
-        tokens.push({ type: "key", value: refToken });
+        push({ type: "key", value: refToken });
         isListStack[isListStack.length - 1] = false;
         if (matchRegex(startMultiLineStringRegex)) {
           multiLineString();
@@ -161,7 +180,7 @@ export function tokenize(source: string): Token[] {
           matchRegex(spaceRegex);
           const unit = matchRegex(unitRegex);
           if (unit) {
-            tokens.push({ type: "unit", value: unit });
+            push({ type: "unit", value: unit });
           } else {
             throw new Error("Missing unit");
           }
@@ -172,11 +191,11 @@ export function tokenize(source: string): Token[] {
           matchRegex(spaceRegex);
           const text = matchRegex(endOfLine);
           if (text) {
-            tokens.push({ type: "text", value: text });
+            push({ type: "text", value: text });
           }
         }
       } else {
-        tokens.push({ type: "reference", value: refToken });
+        push({ type: "reference", value: refToken });
       }
       continue;
     }
@@ -184,16 +203,16 @@ export function tokenize(source: string): Token[] {
     const numberToken = matchRegex(numberRegex);
     if (numberToken) {
       matchRegex(spaceRegex);
-      const unit = matchRegex(unitRegex);
       const percentage = matchSingleChar("%");
       const value = parseFloat(numberToken);
       if (percentage) {
-        tokens.push({ type: "constant", value: value / 100 });
+        push({ type: "number", value: value / 100 });
       } else {
-        tokens.push({ type: "constant", value });
+        push({ type: "number", value });
       }
+      const unit = matchRegex(unitRegex);
       if (unit) {
-        tokens.push({ type: "unit", value: unit });
+        push({ type: "unit", value: unit });
       }
       continue;
     }
@@ -217,7 +236,7 @@ export function tokenize(source: string): Token[] {
       .replace(/(^|\n)\x20*/g, "\n")
       .trim();
     cursor += multilineString[1].length;
-    tokens.push({ type: "text", value });
+    push({ type: "text", value });
   }
 
   return tokens;
@@ -231,9 +250,7 @@ export function printTokens(tokens: Token[], { lineNumbers = false } = {}) {
           lineNumbers
             ? i.toString().padEnd(tokens.length.toString().length + 1, " ")
             : ""
-        }${t.type}${"value" in t ? `(${t.value})` : ""}${Object.keys(t)
-          .filter((k) => k !== "type" && k !== "value")
-          .map((k) => ` [${k}: ${t[k]}]`)}`
+        }${t.type}${"value" in t ? `(${t.value})` : ""}`
     )
     .join("\n");
 }

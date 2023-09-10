@@ -33,7 +33,7 @@
 	let code = '';
 
 	/** @type {import('./types').Lang} */
-	let lang = 'svelte';
+	let lang = 'publicodes';
 
 	/**
 	 * @param {{ code: string; lang: import('./types').Lang }} options
@@ -254,7 +254,8 @@
 			json: () => import('@codemirror/lang-json').then((m) => m.json()),
 			md: () => import('@codemirror/lang-markdown').then((m) => m.markdown()),
 			css: () => import('@codemirror/lang-css').then((m) => m.css()),
-			svelte: () => import('@replit/codemirror-lang-svelte').then((m) => m.svelte())
+			svelte: () => import('@replit/codemirror-lang-svelte').then((m) => m.svelte()),
+			publicodes: () => import('@codemirror/lang-json').then((m) => m.json())
 		},
 		lint: diagnostics,
 		lintOptions: { delay: 200 },

@@ -1,66 +1,17 @@
 <script>
 	import { get_repl_context } from '$lib/context.js';
-	import { BROWSER } from 'esm-env';
-	import { marked } from 'marked';
-	import CodeMirror from '../CodeMirror.svelte';
 	import AstView from './AstView.svelte';
-	import Compiler from './Compiler.js';
-	import CompilerOptions from './CompilerOptions.svelte';
-	import PaneWithPanel from './PaneWithPanel.svelte';
-	import Viewer from './Viewer.svelte';
-
-	export let svelteUrl;
-
-	/** @type {string | null} */
-	export let status;
-
-	/** @type {import('$lib/types').StartOrEnd | null} */
-	export let sourceErrorLoc = null;
-
-	/** @type {import('$lib/types').MessageDetails | null} */
-	export let runtimeError = null;
-
-	export let embedded = false;
-	export let relaxed = false;
-
-	/** @type {string} */
-	export let injectedJS;
-
-	/** @type {string} */
-	export let injectedCSS;
+	import { parse } from '../../../../src/parse.ts';
 
 	// export let theme;
 	export let showAst = false;
-
-	/** @type {'light' | 'dark'} */
-	export let previewTheme;
 
 	/**
 	 * @param {import('$lib/types').File} file
 	 * @param {import('svelte/compiler').CompileOptions} options
 	 */
 	export async function set(file, options) {
-		selected_type = file.type;
-
-		if (file.type === 'js' || file.type === 'json') {
-			js_editor.set({ code: `/* Select a component to see its compiled code */`, lang: 'js' });
-			css_editor.set({ code: `/* Select a component to see its compiled code */`, lang: 'css' });
-			return;
-		}
-
-		if (file.type === 'md') {
-			markdown = marked(file.source);
-			return;
-		}
-
-		if (!compiler) return console.error('Compiler not initialized.');
-
-		const compiled = await compiler.compile(file, options, showAst);
-		if (!js_editor) return; // unmounted
-
-		js_editor.set({ code: compiled.js, lang: 'js' });
-		css_editor.set({ code: compiled.css, lang: 'css' });
-		ast = compiled.ast;
+		ast = parse(file.source, { withLoc: true });
 	}
 
 	/**
@@ -68,102 +19,39 @@
 	 * @param {import('svelte/compiler').CompileOptions} options
 	 */
 	export async function update(selected, options) {
-		if (/(js|json)/.test(selected.type)) return;
-
-		if (selected.type === 'md') {
-			markdown = marked(selected.source);
-			return;
-		}
-
-		if (!compiler) return console.error('Compiler not initialized.');
-
-		const compiled = await compiler.compile(selected, options, showAst);
-
-		js_editor.update({ code: compiled.js, lang: 'js' });
-		css_editor.update({ code: compiled.css, lang: 'css' });
-		ast = compiled.ast;
+		ast = parse(selected.source, { withLoc: true });
 	}
 
 	const { module_editor } = get_repl_context();
 
-	const compiler = BROWSER ? new Compiler(svelteUrl) : null;
-
-	/** @type {CodeMirror} */
-	let js_editor;
-
-	/** @type {CodeMirror} */
-	let css_editor;
-
-	/** @type {'result' | 'js' | 'css' | 'ast'} */
-	let view = 'result';
-	let selected_type = '';
-	let markdown = '';
+	/** @type {'documentation' | 'ast'} */
+	let view = 'ast';
 
 	/** @type {import('svelte/types/compiler/interfaces').Ast} */
 	let ast;
 </script>
 
 <div class="view-toggle">
-	{#if selected_type === 'md'}
-		<button class="active">Markdown</button>
-	{:else}
-		<button class:active={view === 'result'} on:click={() => (view = 'result')}>Result</button>
-		<button class:active={view === 'js'} on:click={() => (view = 'js')}>JS output</button>
-		<button class:active={view === 'css'} on:click={() => (view = 'css')}>CSS output</button>
-		{#if showAst}
-			<button class:active={view === 'ast'} on:click={() => (view = 'ast')}>AST output</button>
-		{/if}
+	<button class:active={view === 'documentation'} on:click={() => (view = 'documentation')}
+		>Documentation</button
+	>
+	{#if showAst}
+		<button class:active={view === 'ast'} on:click={() => (view = 'ast')}>AST output</button>
 	{/if}
 </div>
 
 <!-- component viewer -->
-<div class="tab-content" class:visible={selected_type !== 'md' && view === 'result'}>
-	<Viewer
-		bind:error={runtimeError}
-		{status}
-		{relaxed}
-		{injectedJS}
-		{injectedCSS}
-		theme={previewTheme}
-	/>
-</div>
-
-<!-- js output -->
-<div class="tab-content" class:visible={selected_type !== 'md' && view === 'js'}>
-	{#if embedded}
-		<CodeMirror bind:this={js_editor} errorLoc={sourceErrorLoc} readonly />
-	{:else}
-		<PaneWithPanel pos="50%" panel="Compiler options">
-			<div slot="main">
-				<CodeMirror bind:this={js_editor} errorLoc={sourceErrorLoc} readonly />
-			</div>
-
-			<div slot="panel-body">
-				<CompilerOptions />
-			</div>
-		</PaneWithPanel>
-	{/if}
-</div>
-
-<!-- css output -->
-<div class="tab-content" class:visible={selected_type !== 'md' && view === 'css'}>
-	<CodeMirror bind:this={css_editor} errorLoc={sourceErrorLoc} readonly />
-</div>
+<div class="tab-content" class:visible={view === 'documentation'}>TODO</div>
 
 <!-- ast output -->
 {#if showAst}
-	<div class="tab-content" class:visible={selected_type !== 'md' && view === 'ast'}>
+	<div class="tab-content" class:visible={view === 'ast'}>
 		<!-- ast view interacts with the module editor, wait for it first -->
 		{#if $module_editor}
-			<AstView {ast} autoscroll={selected_type !== 'md' && view === 'ast'} />
+			<AstView {ast} autoscroll={view === 'ast'} />
 		{/if}
 	</div>
 {/if}
-
-<!-- markdown output -->
-<div class="tab-content" class:visible={selected_type === 'md'}>
-	<iframe title="Markdown" srcdoc={markdown} />
-</div>
 
 <style>
 	.view-toggle {

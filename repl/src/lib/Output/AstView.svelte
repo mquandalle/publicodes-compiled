@@ -4,7 +4,7 @@
 	import { cursorIndex } from '../CodeMirror.svelte';
 
 	/** @type {import('svelte/types/compiler/interfaces').Ast} */
-	export let ast;
+	export let ast = {};
 	export let autoscroll = true;
 
 	// $cursor_index may go over the max since ast computation is usually slower.

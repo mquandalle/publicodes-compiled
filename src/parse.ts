@@ -54,8 +54,11 @@ export type ASTPublicodesNode = {
   rules: Array<ASTRuleNode>;
 };
 
-export function parse(source: string): ASTPublicodesNode {
-  const tokens: Token[] = tokenize(source);
+export function parse(
+  source: string,
+  { withLoc = false } = {}
+): ASTPublicodesNode {
+  const tokens: Token[] = tokenize(source, { withLoc });
   const parsedRules: ASTRuleNode[] = [];
   let currentRuleNode;
   let index = 0;
@@ -85,6 +88,10 @@ export function parse(source: string): ASTPublicodesNode {
     } else {
       currentRuleNode = { type: "rule", name: ruleName };
       currentRuleNode.value = parseExpression();
+      if (withLoc) {
+        currentRuleNode.start = currentRuleNode.value.start;
+        currentRuleNode.end = currentRuleNode.value.end;
+      }
       parsedRules.push(currentRuleNode);
     }
   }
@@ -120,7 +127,10 @@ export function parse(source: string): ASTPublicodesNode {
 
   function parseRecord() {
     const entries = [];
+    let start = tokens[index].start,
+      end = tokens[index].end;
     while (index < tokens.length && tokens[index].type === "key") {
+      end = tokens[index].end;
       const key = tokens[index++].value;
       if (textFields.includes(key)) {
         // TODO ensure the token is a string
@@ -182,6 +192,9 @@ export function parse(source: string): ASTPublicodesNode {
         value: node,
       };
     }
+    if (withLoc) {
+      return { ...node, start, end };
+    }
     return node;
   }
 
@@ -191,6 +204,8 @@ export function parse(source: string): ASTPublicodesNode {
 
   function parseComparison(): ASTNode {
     let node = parseAdditionSubstration();
+    let start = node.start;
+    let end = node.end;
 
     let token = tokens[index];
     if (
@@ -204,6 +219,7 @@ export function parse(source: string): ASTPublicodesNode {
     ) {
       index++;
       const right = parseAdditionSubstration();
+      end = right.end;
       node = {
         type: "operation",
         operator: token.value === "=" ? "==" : token.value,
@@ -211,11 +227,16 @@ export function parse(source: string): ASTPublicodesNode {
         right,
       };
     }
+    if (withLoc) {
+      return { ...node, start, end };
+    }
     return node;
   }
 
   function parseAdditionSubstration(): ASTNode {
     let node = parseMultiplicationDivision();
+    let start = node.start;
+    let end = node.end;
 
     while (index < tokens.length) {
       const token = tokens[index];
@@ -225,6 +246,7 @@ export function parse(source: string): ASTPublicodesNode {
       ) {
         index++;
         const right = parseMultiplicationDivision();
+        end = right.end;
         node = {
           type: "operation",
           operator: token.value,
@@ -235,11 +257,16 @@ export function parse(source: string): ASTPublicodesNode {
         break;
       }
     }
+    if (withLoc) {
+      return { ...node, start, end };
+    }
     return node;
   }
 
   function parseMultiplicationDivision(): ASTNode {
     let node = parseParenthesizedExpression();
+    let start = node.start;
+    let end = node.end;
 
     while (index < tokens.length) {
       const token = tokens[index];
@@ -249,6 +276,7 @@ export function parse(source: string): ASTPublicodesNode {
       ) {
         index++;
         const right = parseParenthesizedExpression();
+        end = right.end;
         node = {
           type: "operation",
           operator: token.value,
@@ -259,15 +287,23 @@ export function parse(source: string): ASTPublicodesNode {
         break;
       }
     }
+    if (withLoc) {
+      return { ...node, start, end };
+    }
     return node;
   }
 
   function parseParenthesizedExpression(): ASTNode {
     if (tokens[index].type === "paren-open") {
+      let start = tokens[index].start;
       index++;
       const node = parseInlineExpression();
+      let end = tokens[index].end;
       if (tokens[index++].type !== "paren-close") {
         throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
+      }
+      if (withLoc) {
+        return { ...node, start, end };
       }
       return node;
     }
@@ -276,23 +312,35 @@ export function parse(source: string): ASTPublicodesNode {
 
   function parseTerminalNode(): ASTNode {
     const token = tokens[index++];
-    if (token.type === "constant") {
+    let node;
+    let start = token.start;
+    let end = token.end;
+    if (token.type === "number") {
       if (tokens[index]?.type === "unit") {
-        return {
+        end = tokens[index].end;
+        node = {
           type: "constant",
           value: token.value,
           unit: tokens[index++].value,
         };
+      } else {
+        node = { type: "constant", value: token.value, unit: "" };
       }
-      return { type: "constant", value: token.value, unit: "" };
     } else if (token.type === "reference") {
-      return { type: "reference", name: token.value };
+      node = { type: "reference", name: token.value };
     } else if (token.type === "text") {
-      return { type: "constant", value: token.value };
+      node = { type: "constant", value: token.value };
     } else if (token.type === "boolean") {
-      return { type: "constant", value: token.value };
+      node = { type: "constant", value: token.value };
+    } else {
+      throw new Error(`Unexpected token ${JSON.stringify(token)}`);
     }
-    throw new Error(`Unexpected token ${JSON.stringify(token)}`);
+
+    if (withLoc) {
+      return { ...node, start, end };
+    } else {
+      return node;
+    }
   }
 
   const parsedProgram = { type: "publicodes", rules: parsedRules } as const;

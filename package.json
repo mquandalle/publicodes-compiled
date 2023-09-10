@@ -1,6 +1,7 @@
 {
   "name": "publicodes-compiled",
   "type": "module",
+  "version": "0.1.0",
   "dependencies": {
     "astring": "^1.8.6",
     "estree-toolkit": "^1.7.2",

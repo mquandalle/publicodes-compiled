@@ -1,10 +1,8 @@
 <script>
 	import { EditorState } from '@codemirror/state';
 	import { SplitPane } from '@rich_harris/svelte-split-pane';
-	import { BROWSER } from 'esm-env';
 	import { createEventDispatcher } from 'svelte';
 	import { derived, writable } from 'svelte/store';
-	import Bundler from './Bundler.js';
 	import ComponentSelector from './Input/ComponentSelector.svelte';
 	import ModuleEditor from './Input/ModuleEditor.svelte';
 	import InputOutputToggle from './InputOutputToggle.svelte';
@@ -12,18 +10,11 @@
 	import { set_repl_context } from './context.js';
 	import { get_full_filename } from './utils.js';
 
-	export let packagesUrl = 'https://unpkg.com';
-	export let svelteUrl = `${packagesUrl}/svelte`;
-	export let embedded = false;
 	/** @type {'columns' | 'rows'} */
 	export let orientation = 'columns';
-	export let relaxed = false;
 	export let fixed = false;
 	export let fixedPos = 50;
-	export let injectedJS = '';
 	export let injectedCSS = '';
-	/** @type {'light' | 'dark'} */
-	export let previewTheme = 'light';
 	export let showModified = false;
 	export let showAst = false;
 	export let autocomplete = true;
@@ -41,9 +32,7 @@
 	 */
 	export async function set(data) {
 		$files = data.files;
-		$selected_name = 'App.svelte';
-
-		rebundle();
+		$selected_name = 'Sasu.publicodes';
 
 		// Wait for editors to be ready
 		await $module_editor?.isReady;
@@ -70,6 +59,8 @@
 		$files = data.files;
 
 		const matched_file = data.files.find((file) => get_full_filename(file) === $selected_name);
+
+		console.log(match);
 
 		$selected_name = matched_file ? get_full_filename(matched_file) : 'App.svelte';
 
@@ -116,7 +107,7 @@
 	const files = writable([]);
 
 	/** @type {ReplContext['selected_name']} */
-	const selected_name = writable('App.svelte');
+	const selected_name = writable('Sasu.publicodes');
 
 	/** @type {ReplContext['selected']} */
 	const selected = derived([files, selected_name], ([$files, $selected_name]) => {
@@ -148,9 +139,6 @@
 	/** @type {ReplContext['toggleable']} */
 	const toggleable = writable(false);
 
-	/** @type {ReplContext['bundler']} */
-	const bundler = writable(null);
-
 	/** @type {ReplContext['bundling']} */
 	const bundling = writable(new Promise(() => {}));
 
@@ -159,7 +147,6 @@
 		selected_name,
 		selected,
 		bundle,
-		bundler,
 		bundling,
 		compile_options,
 		cursor_pos,
@@ -169,25 +156,11 @@
 
 		EDITOR_STATE_MAP,
 
-		rebundle,
 		clear_state,
 		go_to_warning_pos,
 		handle_change,
 		handle_select
 	});
-
-	/** @type {Symbol}  */
-	let current_token;
-	async function rebundle() {
-		const token = (current_token = Symbol());
-		let resolver = () => {};
-		$bundling = new Promise((resolve) => {
-			resolver = resolve;
-		});
-		const result = await $bundler?.bundle($files);
-		if (result && token === current_token) $bundle = result;
-		resolver();
-	}
 
 	let is_select_changing = false;
 
@@ -241,8 +214,6 @@
 		dispatch('change', {
 			files: $files
 		});
-
-		rebundle();
 	}
 
 	/** @param {import('./types').MessageDetails | undefined} item */
@@ -289,37 +260,6 @@
 	let width = 0;
 	let show_output = false;
 
-	/** @type {string | null} */
-	let status = null;
-	let status_visible = false;
-
-	/** @type {NodeJS.Timeout | undefined} */
-	let status_timeout = undefined;
-
-	$bundler = BROWSER
-		? new Bundler({
-				packages_url: packagesUrl,
-				svelte_url: svelteUrl,
-				onstatus: (message) => {
-					if (message) {
-						// show bundler status, but only after time has elapsed, to
-						// prevent the banner flickering
-						if (!status_visible && !status_timeout) {
-							status_timeout = setTimeout(() => {
-								status_visible = true;
-							}, 400);
-						}
-					} else {
-						clearTimeout(status_timeout);
-						status_visible = false;
-						status_timeout = undefined;
-					}
-
-					status = message;
-				}
-		  })
-		: null;
-
 	/**
 	 * @param {BeforeUnloadEvent} event
 	 */
@@ -344,22 +284,12 @@
 			max="-4.1rem"
 		>
 			<section slot="a">
-				<ComponentSelector show_modified={showModified} on:add on:remove />
+				<!-- <ComponentSelector show_modified={showModified} on:add on:remove /> -->
 				<ModuleEditor errorLoc={sourceErrorLoc} {autocomplete} {vim} />
 			</section>
 
 			<section slot="b" style="height: 100%;">
-				<Output
-					bind:this={$output}
-					{svelteUrl}
-					status={status_visible ? status : null}
-					{embedded}
-					{relaxed}
-					{injectedJS}
-					{injectedCSS}
-					{showAst}
-					{previewTheme}
-				/>
+				<Output bind:this={$output} {showAst} />
 			</section>
 		</SplitPane>
 	</div>
