@@ -1,4 +1,4 @@
-import { keysWithExpression } from "./parse";
+import { keysWithExpression } from "./parser";
 
 export type Token =
   | { type: "number"; value: number }
@@ -32,7 +32,6 @@ export function tokenize(
   let tokens: Token[] = [];
   let currentIndent = 0;
   let indentStack: number[] = [];
-  let isListStack: boolean[] = [];
   let cursor = 0;
   let prevCursorPos = 0;
 
@@ -66,33 +65,32 @@ export function tokenize(
   }
 
   while (cursor < source.length) {
-    if (cursor === 0 || matchSingleChar("\n")) {
-      const spaces = matchRegex(spaceRegex);
-      let indent = spaces ? spaces.length : 0;
+    if (cursor === 0 || matchRegex(/\n+/y)) {
+      let indent = matchRegex(spaceRegex)?.length || 0;
+      let isListItem = false;
       if (matchSingleChar("-")) {
         indent++;
-        const spaces = matchRegex(spaceRegex);
-        indent += spaces ? spaces.length : 0;
+        indent += matchRegex(spaceRegex)?.length || 0;
+        isListItem = true;
+      } else if (matchSingleChar("#")) {
+        matchRegex(endOfLine);
+        continue;
+      }
 
-        if (indent > currentIndent) {
-          indentStack.push(currentIndent);
-          isListStack.push(true);
-          currentIndent = indent;
-        }
-        push({ type: "list-item" });
-      } else if (indent > currentIndent) {
+      if (indent > currentIndent) {
         push({ type: "indent" });
         indentStack.push(currentIndent);
-        isListStack.push(false);
         currentIndent = indent;
-      } else {
-        while (indent < currentIndent) {
-          if (!isListStack.pop()) {
-            push({ type: "outdent" });
-          }
-          currentIndent = indentStack.pop() || 0;
-        }
       }
+
+      while (indent < currentIndent) {
+        push({ type: "outdent" });
+        currentIndent = indentStack.pop() || 0;
+      }
+      if (isListItem) {
+        push({ type: "list-item" });
+      }
+
       if (cursor > 0) {
         continue;
       }
@@ -120,12 +118,6 @@ export function tokenize(
 
     if (matchSingleChar(")")) {
       push({ type: "paren-close" });
-      continue;
-    }
-
-    const booleanToken = matchRegex(booleanRegex);
-    if (booleanToken) {
-      push({ type: "boolean", value: booleanToken === "oui" });
       continue;
     }
 
@@ -173,7 +165,6 @@ export function tokenize(
       matchRegex(spaceRegex);
       if (matchSingleChar(":")) {
         push({ type: "key", value: refToken });
-        isListStack[isListStack.length - 1] = false;
         if (matchRegex(startMultiLineStringRegex)) {
           multiLineString();
         } else if (refToken === "unité") {
@@ -195,8 +186,18 @@ export function tokenize(
           }
         }
       } else {
-        push({ type: "reference", value: refToken });
+        if (refToken.match(/^(oui|non)$/)) {
+          push({ type: "boolean", value: refToken === "oui" });
+        } else {
+          push({ type: "reference", value: refToken });
+        }
       }
+      continue;
+    }
+
+    const booleanToken = matchRegex(booleanRegex);
+    if (booleanToken) {
+      push({ type: "boolean", value: booleanToken === "oui" });
       continue;
     }
 
@@ -216,7 +217,7 @@ export function tokenize(
       }
       continue;
     }
-    throw new Error(`Cannot tokenize`);
+    throw prettyPrintSyntaxError(`Cannot tokenize`);
   }
 
   function multiLineString() {
@@ -237,6 +238,41 @@ export function tokenize(
       .trim();
     cursor += multilineString[1].length;
     push({ type: "text", value });
+  }
+
+  function prettyPrintSyntaxError(message = "Syntax error") {
+    const error = new Error(message);
+    const lines = source.split("\n");
+    let prevCount = 0;
+    let count = 0;
+    const lineWithCursorIndex = lines.findIndex((line, i) => {
+      count += line.length + 1;
+      if (cursor < count && cursor > prevCount) {
+        return true;
+      }
+      prevCount = count;
+    });
+
+    const printLine = (start: number) => (line: string, i: number) =>
+      `${start + i + 1} | ${line}`;
+
+    const startLine = Math.max(0, lineWithCursorIndex - 3);
+    const endLine = Math.min(lines.length, lineWithCursorIndex + 3);
+    error.message += `\n${lines
+      .slice(startLine, lineWithCursorIndex + 1)
+      .map(printLine(startLine))
+      .join("\n")}`;
+    error.message +=
+      "\n" +
+      " ".repeat(lineWithCursorIndex.toString().length + 1) +
+      "|" +
+      " ".repeat(cursor - prevCount - 1) +
+      "⬆️";
+    error.message += `\n${lines
+      .slice(lineWithCursorIndex + 1, endLine)
+      .map(printLine(lineWithCursorIndex + 1))
+      .join("\n")}`;
+    return error;
   }
 
   return tokens;

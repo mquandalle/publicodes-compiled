@@ -1,7 +1,7 @@
 import { walk } from "zimmerframe";
 import { builders as b } from "estree-toolkit";
 import { generate } from "astring";
-import { type ASTPublicodesNode } from "./parse";
+import { type ASTPublicodesNode } from "./parser";
 
 export function compile(parsedPublicodes: ASTPublicodesNode) {
   const state = { injectedRuntime: new Set() };

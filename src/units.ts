@@ -28,5 +28,9 @@ export function inferUnit(
     return { type: "number", unit: right.unit };
   if (operator === "*" && right.unit === "")
     return { type: "number", unit: left.unit };
+  if (operator === "/" && right.unit === "")
+    return { type: "number", unit: left.unit };
+  if (operator === "/" && left.unit === right.unit)
+    return { type: "number", unit: "" };
   throw new Error("Not implemented");
 }

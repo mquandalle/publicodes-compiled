@@ -1,4 +1,4 @@
-import type { ASTNode, ASTPublicodesNode, ASTRuleNode } from "./parse";
+import type { ASTNode, ASTPublicodesNode, ASTRuleNode } from "./parser";
 import { walk } from "zimmerframe";
 import { conversionFactor, inferUnit } from "./units";
 
@@ -46,7 +46,7 @@ export function link(parsedRules: ASTPublicodesNode) {
           rewrittenRules.set(node, rewrittenRule);
           return rewrittenRule;
         },
-        reference(node, { state: { parentsNames } }) {
+        reference(node, { state: { parentsNames }, path }) {
           const parentName = parentsNames.find((parent) =>
             availableNames.includes(`${parent} . ${node.name}`)
           );
@@ -133,7 +133,7 @@ export function link(parsedRules: ASTPublicodesNode) {
           }
 
           if (rightUnitConvert && leftUnit.unit !== rightUnit.unit) {
-            return {
+            const newNode = {
               ...node,
               right: {
                 type: "unitConversion",
@@ -144,6 +144,8 @@ export function link(parsedRules: ASTPublicodesNode) {
                 value: node.right,
               },
             };
+            inferedUnits.set(newNode, inferedUnits.get(node));
+            return newNode;
           }
         },
         ["toutes ces conditions"](node) {
@@ -157,11 +159,36 @@ export function link(parsedRules: ASTPublicodesNode) {
         ["applicable si"](node, { visit }) {
           inferedUnits.set(node, inferedUnits.get(visit(node.value)));
         },
-        variations(node, { visit }) {
+        variations(node, { visit, next }) {
           const firstCondition = visit(node.value[0].si);
           const firstConsequence = node.value[0].alors;
           inferedUnits.set(node, inferedUnits.get(visit(firstConsequence)));
           // ensure all test are boolean, and convert consequences to the same unit
+        },
+        somme(node, { visit }) {
+          const firstTerm = visit(node.value[0]);
+          const firstTermUnit = inferedUnits.get(firstTerm);
+          inferedUnits.set(node, firstTermUnit);
+        },
+        plafond(node, { visit }) {
+          const unit = inferedUnits.get(visit(node.value));
+          inferedUnits.set(node, unit);
+        },
+        ["par défaut"](node, { visit }) {
+          const unit = inferedUnits.get(visit(node["par défaut"]));
+          inferedUnits.set(node, unit);
+        },
+        ["unité"](node) {
+          inferedUnits.set(node, { type: "number", unit: node["unité"].value });
+          // todo convert
+          inferedUnits.set(node.value, {
+            type: "number",
+            unit: node["unité"].value,
+          });
+        },
+        ["possibilités"](node) {
+          inferedUnits.set(node, { type: "string" });
+          return node;
         },
       }
     );

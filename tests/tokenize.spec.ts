@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { tokenize, printTokens } from "../src/tokenize";
+import { tokenize, printTokens } from "../src/tokenizer";
 
 const snap = (intput: string) => printTokens(tokenize(intput));
 

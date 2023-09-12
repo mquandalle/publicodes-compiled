@@ -1,5 +1,5 @@
-import { parse } from "./parse";
-import { compile } from "./compile";
+import { parse } from "./parser";
+import { compile } from "./compiler";
 
 export class CompiledPublicodes {
   compiledRules: any;

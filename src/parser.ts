@@ -1,5 +1,5 @@
-import { tokenize, type Token } from "./tokenize";
-import { link } from "./link";
+import { tokenize, type Token } from "./tokenizer";
+import { link } from "./linker";
 
 const mechanismSignatures = {
   "une de ces conditions": [],
@@ -8,6 +8,8 @@ const mechanismSignatures = {
   plafond: [],
   "applicable si": [],
   somme: [],
+  unité: [],
+  "par défaut": [],
   valeur: [],
   produit: ["assiette", "taux"],
   barème: ["assiette", "tranches"],
@@ -23,7 +25,13 @@ export const keysWithExpression = new Set([
   ),
 ]);
 
-const chainableMecanisms = ["applicable si", "plancher", "plafond"];
+const chainableMecanisms = [
+  "par défaut",
+  "unité",
+  "applicable si",
+  "plancher",
+  "plafond",
+];
 
 const textFields = [
   "description",
@@ -71,7 +79,6 @@ export function parse(
     } else if (currentToken.type === "key") {
       parseRule();
     } else {
-      console.log(currentToken);
       throw new Error(`Unexpected token ${currentToken.type}`);
     }
   }
@@ -97,18 +104,16 @@ export function parse(
   }
 
   function parseExpression() {
-    switch (tokens[index]?.type) {
-      case "indent":
-        index++; // skip the 'indent' token
-        return parseRecord();
-      case "key":
+    if (tokens[index]?.type === "indent") {
+      index++; // skip the 'indent' token
+      const node =
+        tokens[index]?.type === "list-item" ? parseList() : parseRecord();
+      if (tokens[index]?.type === "outdent") {
         index++;
-        return parseExpression();
-      case "list-item":
-        return parseList();
-      default:
-        return parseInlineExpression();
+      }
+      return node;
     }
+    return parseInlineExpression();
   }
 
   function parseList() {
@@ -133,11 +138,31 @@ export function parse(
       end = tokens[index].end;
       const key = tokens[index++].value;
       if (textFields.includes(key)) {
-        // TODO ensure the token is a string
-        currentRuleNode[key] = tokens[index++].value;
+        const nextToken = tokens[index];
+        if (
+          nextToken.type === "text" ||
+          nextToken.type === "reference" ||
+          nextToken.type === "number"
+        ) {
+          currentRuleNode[key] = nextToken.value;
+          index++;
+        } else if (nextToken.type === "key") {
+          currentRuleNode[key] = "";
+        } else if (nextToken.type === "indent") {
+          currentRuleNode[key] = parseExpression();
+        } else {
+          throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
+        }
       } else {
-        entries.push([key, parseExpression()]);
+        if (key === "unité") {
+          entries.push([key, tokens[index++]]);
+        } else {
+          entries.push([key, parseExpression()]);
+        }
       }
+    }
+    if (entries.length === 0) {
+      throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
     }
     if (
       index < tokens.length &&
@@ -145,13 +170,6 @@ export function parse(
       tokens[index].type !== "list-item"
     ) {
       throw new Error(`Expected token at ${index}`);
-    }
-    if (index < tokens.length && tokens[index].type === "outdent") {
-      index++;
-    }
-
-    if (entries.length === 0) {
-      throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
     }
 
     const mechanismsEntries = entries.filter(([key]) =>
@@ -167,17 +185,17 @@ export function parse(
       chainableMecanisms.includes(key)
     );
 
-    if (nonChainableMechanism.length !== 1) {
-      console.log(parsedRules);
+    if (nonChainableMechanism.length > 1) {
       throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
     }
 
     let node;
-    const currentMechanism = nonChainableMechanism[0];
-    const mechanismName = currentMechanism[0];
+    const mechanismName = nonChainableMechanism[0]?.[0];
+    const value = nonChainableMechanism[0]?.[1];
     const mechanismKeys = mechanismSignatures[mechanismName];
-    const value = nonChainableMechanism[0][1];
-    if (mechanismName === "valeur") {
+    if (!mechanismName) {
+      node = { type: "constant", value: undefined };
+    } else if (mechanismName === "valeur") {
       node = value;
     } else if (mechanismKeys.length === 0) {
       node = { type: mechanismName, value };
@@ -192,6 +210,7 @@ export function parse(
         value: node,
       };
     }
+
     if (withLoc) {
       return { ...node, start, end };
     }
@@ -333,7 +352,9 @@ export function parse(
     } else if (token.type === "boolean") {
       node = { type: "constant", value: token.value };
     } else {
-      throw new Error(`Unexpected token ${JSON.stringify(token)}`);
+      throw new Error(
+        `Unexpected token ${JSON.stringify(token)} at ${index - 1}`
+      );
     }
 
     if (withLoc) {

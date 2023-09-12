@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { parse } from "../src/parse";
+import { parse } from "../src/parser";
+import { printTokens, tokenize } from "../src/tokenizer";
 
 test("parse list and records", () => {
-  const parsedPublicodes = parse(
-    `
+  const listAndRecords = `
 simple record:
     a: 1
     b: 2
@@ -38,6 +38,15 @@ mixed list and records:
                     - "okok"
         b2: okok
 
+recursive lists:
+    a:
+      - toutes ces conditions:
+        - "ok"
+        - "okok"
+      - une de ces conditions:
+        - "ok"
+        - "okok"
+
 deep tree:
     a:
         aL:
@@ -46,8 +55,12 @@ deep tree:
                     - a:
                         aOk: ok
     b: ok
-`.trim()
-  );
+`.trim();
+  const parsedPublicodes = parse(listAndRecords);
+
+  expect(
+    printTokens(tokenize(listAndRecords), { lineNumbers: true })
+  ).toMatchSnapshot();
 
   const rules = Object.fromEntries(
     parsedPublicodes.rules.map((r) => [r.name, r.value])
@@ -80,6 +93,26 @@ deep tree:
         c: { type: "constant", value: "1" },
       },
     },
+  });
+
+  expect(rules["recursive lists"]).toEqual({
+    type: "record",
+    a: [
+      {
+        type: "toutes ces conditions",
+        value: [
+          { type: "constant", value: "ok" },
+          { type: "constant", value: "okok" },
+        ],
+      },
+      {
+        type: "une de ces conditions",
+        value: [
+          { type: "constant", value: "ok" },
+          { type: "constant", value: "okok" },
+        ],
+      },
+    ],
   });
 
   expect(rules["mixed list and records"]).toEqual({

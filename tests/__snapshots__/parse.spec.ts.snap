@@ -1,0 +1,126 @@
+// Bun Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`parse list and records 1`] = `
+"0   key(simple record)
+1   indent
+2   key(a)
+3   text(1)
+4   key(b)
+5   text(2)
+6   outdent
+7   key(simple lists)
+8   indent
+9   key(a)
+10  indent
+11  list-item
+12  text(ok)
+13  list-item
+14  text(okok)
+15  outdent
+16  key(b)
+17  indent
+18  list-item
+19  text(ok)
+20  list-item
+21  text(okok)
+22  outdent
+23  outdent
+24  key(imbricated records)
+25  indent
+26  key(a)
+27  indent
+28  key(b)
+29  indent
+30  key(c)
+31  text(1)
+32  outdent
+33  outdent
+34  outdent
+35  key(mixed list and records)
+36  indent
+37  key(a)
+38  indent
+39  key(a1)
+40  indent
+41  list-item
+42  text(ok)
+43  list-item
+44  text(okok)
+45  outdent
+46  key(a2)
+47  indent
+48  list-item
+49  text(ok)
+50  list-item
+51  text(okok)
+52  outdent
+53  outdent
+54  key(b)
+55  indent
+56  key(b1)
+57  indent
+58  list-item
+59  key(b11)
+60  indent
+61  list-item
+62  text(ok)
+63  list-item
+64  key(b111)
+65  indent
+66  list-item
+67  text(ok)
+68  list-item
+69  text(okok)
+70  outdent
+71  outdent
+72  outdent
+73  key(b2)
+74  text(okok)
+75  outdent
+76  outdent
+77  key(recursive lists)
+78  indent
+79  key(a)
+80  indent
+81  list-item
+82  key(toutes ces conditions)
+83  indent
+84  list-item
+85  text(ok)
+86  list-item
+87  text(okok)
+88  outdent
+89  list-item
+90  key(une de ces conditions)
+91  indent
+92  list-item
+93  text(ok)
+94  list-item
+95  text(okok)
+96  outdent
+97  outdent
+98  outdent
+99  key(deep tree)
+100 indent
+101 key(a)
+102 indent
+103 key(aL)
+104 indent
+105 list-item
+106 key(a)
+107 indent
+108 key(aL)
+109 indent
+110 list-item
+111 key(a)
+112 indent
+113 key(aOk)
+114 text(ok)
+115 outdent
+116 outdent
+117 outdent
+118 outdent
+119 outdent
+120 key(b)
+121 text(ok)"
+`;

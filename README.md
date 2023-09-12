@@ -2,7 +2,7 @@
 
 ```bash
 bun install
-bun ./bench/evaluate.js
+bun ./bench/sasu.js
 ```
 
 Prototype d'une version de publicodes transpilée en JavaScript. Écriture d'un parseur à la main.
