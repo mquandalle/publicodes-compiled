@@ -10,19 +10,23 @@
    * @param {import('$lib/types').File} file
    * @param {import('svelte/compiler').CompileOptions} options
    */
-  export async function set(file, options) {
-    ast = parse(file.source, { withLoc: true });
-  }
+  export const set = update;
 
   /**
    * @param {import('$lib/types').File} selected
    * @param {import('svelte/compiler').CompileOptions} options
    */
   export async function update(selected, options) {
-    ast = parse(selected.source, { withLoc: true });
+    try {
+      ast = parse(selected.source, { withLoc: true });
+      $error_message = "";
+    } catch (err) {
+      console.log(err);
+      $error_message = err;
+    }
   }
 
-  const { module_editor } = get_repl_context();
+  const { module_editor, error_message } = get_repl_context();
 
   /** @type {'documentation' | 'ast'} */
   let view = "ast";

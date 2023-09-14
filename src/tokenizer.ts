@@ -15,7 +15,6 @@ export type Token =
   | { type: "list-item" };
 
 const ruleNameRegex = /[\p{L}$](([$\p{L}\x20\.'0-9]|\S-\S)*[\p{L}$0-9])?/uy;
-const booleanRegex = /(oui|non)/y;
 const numberRegex = /[0-9]+(\.[0-9]+)?/y;
 const unitRegex = /[a-z€]+(\/[a-z€]+)?/y;
 const infixOperatorRegex = /(<=|>=|<|>|=|\+|\-|\*|\/)/y;
@@ -23,13 +22,13 @@ const endOfLine = /.*/y;
 const spaceRegex = /\x20+/y;
 const startMultiLineStringRegex = /\x20*\|\x20*\n/y;
 
-type TokenWithLoc = Token & { start?: number; end?: number };
+type TokenWithLoc = Token & { start: number; end: number };
 
-export function tokenize(
+export function tokenize<WL extends boolean>(
   source: string,
-  { withLoc = false } = {}
-): TokenWithLoc[] {
-  let tokens: Token[] = [];
+  { withLoc = false as WL } = {}
+): Array<WL extends true ? TokenWithLoc : Token> {
+  let tokens: Token[] | TokenWithLoc[] = [];
   let currentIndent = 0;
   let indentStack: number[] = [];
   let cursor = 0;
@@ -39,26 +38,28 @@ export function tokenize(
     regex.lastIndex = cursor;
     const matched = regex.exec(source);
     if (matched) {
-      if (withLoc) {
+      const updateLoc = regex !== spaceRegex;
+      if (withLoc && updateLoc) {
         prevCursorPos = cursor;
       }
       cursor += matched[0].length;
       return matched[0];
     }
   }
-  function matchSingleChar<const C extends string>(char: C): C | undefined {
+  function matchSingleChar(char: string): boolean {
     const matched = source[cursor] === char;
     if (matched) {
-      if (withLoc) {
-        prevCursorPos = cursor;
-      }
       cursor++;
-      return char;
     }
+    return matched;
   }
   function push(token: Token) {
     if (withLoc) {
-      tokens.push({ ...token, start: prevCursorPos, end: cursor });
+      tokens.push({
+        ...token,
+        start: prevCursorPos,
+        end: cursor,
+      });
     } else {
       tokens.push(token);
     }
@@ -121,7 +122,8 @@ export function tokenize(
       continue;
     }
 
-    let quoteType = matchSingleChar('"') || matchSingleChar("'");
+    let quoteType: "'" | '"' | false =
+      (matchSingleChar('"') && '"') || (matchSingleChar("'") && "'");
     if (quoteType) {
       let value = "";
       let legacyDuplicatedQuotes = false;
@@ -192,12 +194,6 @@ export function tokenize(
           push({ type: "reference", value: refToken });
         }
       }
-      continue;
-    }
-
-    const booleanToken = matchRegex(booleanRegex);
-    if (booleanToken) {
-      push({ type: "boolean", value: booleanToken === "oui" });
       continue;
     }
 
@@ -279,6 +275,13 @@ export function tokenize(
 }
 
 export function printTokens(tokens: Token[], { lineNumbers = false } = {}) {
+  const maxCursorPos = tokens[tokens.length - 1]?.end?.toString().length ?? 0;
+  const printStartEnd = (t) =>
+    t.start !== undefined || t.end !== undefined
+      ? `${t.start.toString().padStart(maxCursorPos)}-${t.end
+          .toString()
+          .padEnd(maxCursorPos)} | `
+      : "";
   return tokens
     .map(
       (t, i) =>
@@ -286,7 +289,7 @@ export function printTokens(tokens: Token[], { lineNumbers = false } = {}) {
           lineNumbers
             ? i.toString().padEnd(tokens.length.toString().length + 1, " ")
             : ""
-        }${t.type}${"value" in t ? `(${t.value})` : ""}`
+        }${printStartEnd(t)}${t.type}${"value" in t ? `(${t.value})` : ""}`
     )
     .join("\n");
 }

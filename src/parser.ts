@@ -84,7 +84,8 @@ export function parse(
   }
 
   function parseRule() {
-    const ruleName = tokens[index++].value;
+    const keyToken = tokens[index++];
+    const ruleName = keyToken.value;
     // a new rule, this one is empty
     if (tokens[index]?.type === "key") {
       parsedRules.push({
@@ -96,7 +97,7 @@ export function parse(
       currentRuleNode = { type: "rule", name: ruleName };
       currentRuleNode.value = parseExpression();
       if (withLoc) {
-        currentRuleNode.start = currentRuleNode.value.start;
+        currentRuleNode.start = keyToken.start;
         currentRuleNode.end = currentRuleNode.value.end;
       }
       parsedRules.push(currentRuleNode);
@@ -172,11 +173,18 @@ export function parse(
       throw new Error(`Expected token at ${index}`);
     }
 
+    let node;
+
     const mechanismsEntries = entries.filter(([key]) =>
       mechanismNames.includes(key)
     );
     if (mechanismsEntries.length !== entries.length) {
-      return { ...Object.fromEntries(entries), type: "record" };
+      node = { ...Object.fromEntries(entries), type: "record" };
+      if (withLoc) {
+        node.start = start;
+        node.end = end;
+      }
+      return node;
     }
     const nonChainableMechanism = mechanismsEntries.filter(
       ([key]) => !chainableMecanisms.includes(key)
@@ -189,7 +197,6 @@ export function parse(
       throw new Error(`Unexpected token ${JSON.stringify(tokens[index])}`);
     }
 
-    let node;
     const mechanismName = nonChainableMechanism[0]?.[0];
     const value = nonChainableMechanism[0]?.[1];
     const mechanismKeys = mechanismSignatures[mechanismName];
@@ -365,6 +372,11 @@ export function parse(
   }
 
   const parsedProgram = { type: "publicodes", rules: parsedRules } as const;
+
+  if (withLoc) {
+    parsedProgram.start = parsedRules[0].start;
+    parsedProgram.end = parsedRules[parsedRules.length - 1].end;
+  }
 
   // return parsedProgram;
   return link(parsedProgram);
