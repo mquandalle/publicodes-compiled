@@ -99,6 +99,14 @@ export function compile(parsedPublicodes: ASTPublicodesNode) {
         visit(node.value[1].sinon)
       );
     },
+
+    ["applicable si"](node, { visit }) {
+      return b.conditionalExpression(
+        visit(node["applicable si"]),
+        visit(node["value"]),
+        b.identifier("null")
+      );
+    },
   });
 
   const jsCodeRules = generate(esTree);

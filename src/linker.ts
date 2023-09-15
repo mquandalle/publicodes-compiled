@@ -1,6 +1,6 @@
 import type { ASTNode, ASTPublicodesNode, ASTRuleNode } from "./parser";
 import { walk } from "zimmerframe";
-import { conversionFactor, inferUnit } from "./units";
+import { conversionFactor, inferUnit } from "./lib/units";
 
 type InferedType =
   | { type: "string" | "boolean" }
