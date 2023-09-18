@@ -15,7 +15,7 @@ export function compile(parsedPublicodes: ASTPublicodesNode) {
     },
 
     rule(node, { visit }) {
-      return b.arrowFunctionExpression([], visit(node.value));
+      return b.arrowFunctionExpression([b.identifier("r")], visit(node.value));
     },
 
     constant(node) {
@@ -111,5 +111,5 @@ export function compile(parsedPublicodes: ASTPublicodesNode) {
 
   const jsCodeRules = generate(esTree);
   const injectedRuntime = Array.from(state.injectedRuntime).join(";\n");
-  return `((r) => {${injectedRuntime}\nreturn ${jsCodeRules}})`;
+  return `(() => {${injectedRuntime}\nreturn ${jsCodeRules}})`;
 }

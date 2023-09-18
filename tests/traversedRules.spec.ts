@@ -38,7 +38,7 @@ g: 1
   });
   it("should not be polluted by previous evaluations", () => {
     expect(engine.traversedRules("a")).toEqual(["a"]);
-    engine.evaluate("d");
+    engine.traversedRules("d");
     expect(engine.traversedRules("d")).toEqual(["d", "e"]);
   });
   it("should contain simple dependency", () => {
@@ -48,7 +48,7 @@ g: 1
     expect(engine.traversedRules("c")).toEqual(["c", "a"]);
   });
   it("should not be polluted by previous term in an operation", () => {
-    engine.evaluate("branches");
+    engine.traversedRules("branches");
     expect(engine.traversedRules("f")).toEqual(["f", "g"]);
   });
 });

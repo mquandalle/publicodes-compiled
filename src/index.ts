@@ -1,43 +1,41 @@
 import { parse } from "./parser";
 import { compile } from "./compiler";
-import { ImmutableList } from "./lib/linkedList";
 
 export class CompiledPublicodes {
   compiledRules: any;
-  cache: any;
-
-  traversedRulesLList: InstanceType<typeof ImmutableList>;
+  cache: any = {};
   traversedRulesCache: any = {};
 
   constructor(source: string) {
     const jsCode = compile(parse(source));
-    const r = (x: string) => this.evaluate(x);
-    this.compiledRules = eval(jsCode)(r);
-    this.cache = {};
-    this.traversedRulesLList = new ImmutableList();
+    this.compiledRules = eval(jsCode)();
   }
 
   evaluate(ruleName: string) {
-    if (!this.cache[ruleName]) {
-      const traversedRulesParent = this.traversedRulesLList;
-      this.traversedRulesLList = new ImmutableList().append(ruleName);
-      this.cache[ruleName] = this.compiledRules[ruleName]();
-      this.traversedRulesCache[ruleName] = this.traversedRulesLList;
-      this.traversedRulesLList = traversedRulesParent.concat(
-        this.traversedRulesLList
-      );
-    } else {
-      this.traversedRulesLList = this.traversedRulesLList.concat(
-        this.traversedRulesCache[ruleName]
-      );
-    }
-    return this.cache[ruleName];
+    const r = (x: string) => {
+      this.cache[x] ??= this.compiledRules[x](r);
+      return this.cache[x];
+    };
+    return r(ruleName);
   }
 
   traversedRules(ruleName: string) {
-    this.evaluate(ruleName);
-    const traversedVariables = this.traversedRulesCache[ruleName];
-    return Array.from(new Set(traversedVariables));
+    const traversedRulesStack: string[] = [];
+    const r = (x: string) => {
+      if (!this.traversedRulesCache[x]) {
+        const traversedRulesStartIndex = traversedRulesStack.length;
+        traversedRulesStack.push(x);
+
+        this.cache[x] = this.compiledRules[x](r);
+        this.traversedRulesCache[x] = traversedRulesStack.slice(
+          traversedRulesStartIndex
+        );
+      }
+      return this.cache[x];
+    };
+
+    r(ruleName);
+    return Array.from(new Set(this.traversedRulesCache[ruleName]));
   }
 
   resetCache() {
