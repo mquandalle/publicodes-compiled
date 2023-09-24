@@ -6,10 +6,13 @@ type InferedType =
   | { type: "string" | "boolean" }
   | { type: "number"; unit: string };
 
-export function link(parsedRules: ASTPublicodesNode) {
+export function link(parsedRules: ASTPublicodesNode, availableRules = {}) {
   const inferedUnits = new WeakMap<ASTNode, InferedType>();
   const rewrittenRules = new WeakMap<ASTNode, ASTNode>();
-  const availableNames = parsedRules.rules.map((rule) => rule.name);
+  const allAvailableNames = [
+    ...Object.keys(availableRules),
+    ...parsedRules.rules.map((rule) => rule.name),
+  ];
 
   function inferRuleUnit(ruleNode: ASTRuleNode) {
     if (rewrittenRules.has(ruleNode)) {
@@ -46,24 +49,28 @@ export function link(parsedRules: ASTPublicodesNode) {
           rewrittenRules.set(node, rewrittenRule);
           return rewrittenRule;
         },
-        reference(node, { state: { parentsNames }, path }) {
+        reference(node, { state: { parentsNames } }) {
           const parentName = parentsNames.find((parent) =>
-            availableNames.includes(`${parent} . ${node.name}`)
+            allAvailableNames.includes(`${parent} . ${node.name}`)
           );
           if (parentName) {
             node.name = `${parentName} . ${node.name}`;
-          } else if (availableNames.includes(node.name)) {
+          } else if (allAvailableNames.includes(node.name)) {
           } else {
             throw Error(`Unknown reference ${node.name} in ${parentsNames[0]}`);
           }
 
-          const associatedRule = parsedRules.rules.find(
-            (rule) => rule.name === node.name
-          );
-          if (!inferedUnits.has(associatedRule)) {
-            inferRuleUnit(associatedRule);
+          if (availableRules[node.name]) {
+            inferedUnits.set(node, availableRules[node.name].unit);
+          } else {
+            const associatedRule = parsedRules.rules.find(
+              (rule) => rule.name === node.name
+            );
+            if (!inferedUnits.has(associatedRule)) {
+              inferRuleUnit(associatedRule);
+            }
+            inferedUnits.set(node, inferedUnits.get(associatedRule));
           }
-          inferedUnits.set(node, inferedUnits.get(associatedRule));
           return node;
         },
         constant(node) {

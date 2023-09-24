@@ -228,3 +228,19 @@ aide:
     },
   });
 });
+
+test("empty rule", () => {
+  expect(parse("a:")).toEqual({
+    type: "publicodes",
+    rules: [
+      {
+        type: "rule",
+        name: "a",
+        value: {
+          type: "undefined",
+        },
+        unit: undefined,
+      },
+    ],
+  });
+});

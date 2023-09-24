@@ -64,7 +64,7 @@ export type ASTPublicodesNode = {
 
 export function parse(
   source: string,
-  { withLoc = false } = {}
+  { withLoc = false, availableRules = [] } = {}
 ): ASTPublicodesNode {
   const tokens: Token[] = tokenize(source, { withLoc });
   const parsedRules: ASTRuleNode[] = [];
@@ -87,7 +87,7 @@ export function parse(
     const keyToken = tokens[index++];
     const ruleName = keyToken.value;
     // a new rule, this one is empty
-    if (tokens[index]?.type === "key") {
+    if (index >= tokens.length || tokens[index]?.type === "key") {
       parsedRules.push({
         type: "rule",
         name: ruleName,
@@ -379,5 +379,15 @@ export function parse(
   }
 
   // return parsedProgram;
-  return link(parsedProgram);
+  return link(parsedProgram, availableRules);
+}
+
+export function parseJsObject(jsObj, options) {
+  // HACK
+  return parse(
+    Object.entries(jsObj)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\n"),
+    options
+  );
 }
