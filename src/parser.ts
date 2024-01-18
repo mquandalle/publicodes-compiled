@@ -11,7 +11,7 @@ const mechanismSignatures = {
   unité: [],
   "par défaut": [],
   valeur: [],
-  produit: ["assiette", "taux"],
+  produit: [],
   barème: ["assiette", "tranches"],
 };
 

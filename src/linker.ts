@@ -110,10 +110,18 @@ export function link(parsedRules: ASTPublicodesNode, availableRules = {}) {
           inferedUnits.set(newNode, assietteUnit);
           return newNode;
         },
-        produit(node, { visit }) {
-          const assietteUnit = inferedUnits.get(visit(node.assiette));
-          const tauxUnit = inferedUnits.get(visit(node.taux));
-          inferedUnits.set(node, inferUnit("*", assietteUnit, tauxUnit));
+        produit(_n, { next }) {
+          const node = next();
+          let inferedUnit = inferedUnits.get(node.value[0]);
+          for (let i = 1; i < node.value.length; i++) {
+            inferedUnit = inferUnit(
+              "*",
+              inferedUnit,
+              inferedUnits.get(node.value[i])
+            );
+          }
+          inferedUnits.set(node, inferedUnit);
+          return node;
         },
         operation(node, { visit }) {
           const leftUnit = inferedUnits.get(visit(node.left));

@@ -39,12 +39,11 @@ export function compile(parsedPublicodes: ASTPublicodesNode) {
     },
 
     produit(node, { visit }) {
-      return visit({
-        type: "operation",
-        operator: "*",
-        left: node.assiette,
-        right: node.taux,
-      });
+      let res = visit(node.value[0]);
+      for (let i = 1; i < node.value.length; i++) {
+        res = b.binaryExpression("*", res, visit(node.value[i]));
+      }
+      return res;
     },
 
     unitConversion(node, { visit }) {

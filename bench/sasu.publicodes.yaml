@@ -22,8 +22,8 @@ dividendes . brut: bénéfice . net
 dividendes . net: brut - prélèvement forfaitaire unique
 dividendes . prélèvement forfaitaire unique:
   produit:
-    assiette: brut
-    taux: 30%
+    - brut
+    - 30%
 
 proportion salaire: 50%
 salaire:
@@ -33,9 +33,8 @@ salaire . charges:
   titre: Les charges sociales
   applicable si: oui
   produit:
-    assiette: total
-    taux:
-      variations:
+    - total
+    - variations:
         - si: éligible acre
           alors: 20%
         - sinon: 40%
